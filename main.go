@@ -3,7 +3,7 @@ package main
 
 import (
 	"fmt"
-	"pango/series" // replace with your module path
+	"pango/series"
 )
 
 func main() {
