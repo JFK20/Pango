@@ -12,17 +12,27 @@ type Series[T any] struct {
 	index  []string
 }
 
-// creating an new Series
+// NewSeries creates an new Series
 func NewSeries[T any](name string, values []T, index []string) *Series[T] {
 	if len(values) == 0 {
 		panic("cannot create Series with no data")
 	}
 
-	return &Series[T]{
+	if index != nil && len(index) != len(values) {
+		panic("index length must match values length")
+	}
+
+	tmp := &Series[T]{
 		name:   name,
 		values: values,
 		index:  index,
 	}
+
+	if index == nil {
+		tmp.Index()
+	}
+
+	return tmp
 }
 
 // Len return the length of the value slice
@@ -35,12 +45,12 @@ func (s *Series[T]) Name() string {
 	return s.name
 }
 
-// SetSeries sets the Name od the Series
+// SetName sets the Name od the Series
 func (s *Series[T]) SetName(name string) {
 	s.name = name
 }
 
-// Values() returns the values of the series as an copy of the values slice
+// Values returns the values of the series as an copy of the values slice
 // through the copy manipulation the original data is impossible
 func (s *Series[T]) Values() []T {
 	copied := make([]T, len(s.values))
@@ -50,11 +60,12 @@ func (s *Series[T]) Values() []T {
 
 func (s *Series[T]) Index() []string {
 	if s.index == nil {
-		index := make([]string, s.Len())
-		for i := range index {
-			index[i] = fmt.Sprintf("%d", i)
+		s.index = make([]string, s.Len())
+	}
+	for i := range s.index {
+		if s.index[i] == "" {
+			s.index[i] = fmt.Sprintf("%d", i)
 		}
-		return index
 	}
 	return s.index
 }
@@ -63,7 +74,7 @@ func (s *Series[T]) Get(i int) (string, any) {
 	if i < 0 || i >= s.Len() {
 		panic(fmt.Sprintf("index %d out of bounds", i))
 	}
-	label := s.Index()[i] // uses Index() so it generates if nil
+	label := s.Index()[i]
 	return label, s.values[i]
 }
 
@@ -127,8 +138,7 @@ func (s *Series[T]) Tail(n int) *Series[T] {
 	return NewSeries(name, values, index)
 }
 
-func (s *Series[T]) Append[R any](values []R) {
-	if R == T {
-		s.values = append(s.values, values)
-	}
+func (s *Series[T]) Append(values ...T) {
+	s.values = append(s.values, values...)
+	s.Index()
 }
