@@ -10,7 +10,7 @@ func main() {
 	// Create a series: ages with custom index
 	ages := series.NewSeries(
 		"Age",                               // name
-		[]any{25, 30, 35},                   // values
+		[]int{25, 30, 35},                   // values
 		[]string{"Alice", "Bob", "Charlie"}, // index
 
 	)
