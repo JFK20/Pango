@@ -126,3 +126,9 @@ func (s *Series[T]) Tail(n int) *Series[T] {
 
 	return NewSeries(name, values, index)
 }
+
+func (s *Series[T]) Append[R any](values []R) {
+	if R == T {
+		s.values = append(s.values, values)
+	}
+}
