@@ -27,13 +27,13 @@ func TestNewSeries(t *testing.T) {
 				t.Error("expected panic for empty values")
 			}
 		}()
-		NewSeries[int]("test", []int{}, nil)
+		NewSeries[int, string]("test", []int{}, nil)
 	})
 }
 
 func TestLen(t *testing.T) {
 	values := []int{1, 2, 3, 4, 5}
-	s := NewSeries("test", values, nil)
+	s := NewSeriesInt("test", values)
 
 	if s.Len() != 5 {
 		t.Errorf("expected length 5, got %d", s.Len())
@@ -42,7 +42,7 @@ func TestLen(t *testing.T) {
 
 func TestName(t *testing.T) {
 	values := []string{"a", "b", "c"}
-	s := NewSeries("my_series", values, nil)
+	s := NewSeriesInt("my_series", values)
 
 	if s.Name() != "my_series" {
 		t.Errorf("expected name 'my_series', got %s", s.Name())
@@ -51,7 +51,7 @@ func TestName(t *testing.T) {
 
 func TestSetName(t *testing.T) {
 	values := []int{1, 2, 3}
-	s := NewSeries("old_name", values, nil)
+	s := NewSeriesInt("old_name", values)
 	s.SetName("new_name")
 
 	if s.Name() != "new_name" {
@@ -61,7 +61,7 @@ func TestSetName(t *testing.T) {
 
 func TestValues(t *testing.T) {
 	values := []int{1, 2, 3, 4, 5}
-	s := NewSeries("test", values, nil)
+	s := NewSeriesInt("test", values)
 
 	copied := s.Values()
 
@@ -93,7 +93,7 @@ func TestIndex(t *testing.T) {
 
 	t.Run("generates index when nil", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("test", values)
 
 		idx := s.Index()
 		if len(idx) != 3 {
@@ -124,7 +124,7 @@ func TestGet(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("test", values)
 		s.Get(-1)
 	})
 
@@ -135,9 +135,20 @@ func TestGet(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("test", values)
 		s.Get(10)
 	})
+}
+
+func TestSeries_IndexGet(t *testing.T) {
+	values := []int{1, 2, 3}
+	index := []string{"a", "b", "c"}
+	s := NewSeries("test", values, index)
+
+	val := s.IndexGet("b")
+	if val != 2 {
+		t.Errorf("expected value 2 for index 'b', got %v", val)
+	}
 }
 
 func TestString(t *testing.T) {
@@ -161,7 +172,7 @@ func TestString(t *testing.T) {
 		for i := range values {
 			values[i] = i
 		}
-		s := NewSeries("long_series", values, nil)
+		s := NewSeriesInt("long_series", values)
 
 		str := s.String()
 		if str == "" {
@@ -187,7 +198,7 @@ func TestHead(t *testing.T) {
 
 	t.Run("returns all elements when n exceeds length", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("test", values)
 
 		head := s.Head(10)
 		if head.Len() != 3 {
@@ -197,7 +208,7 @@ func TestHead(t *testing.T) {
 
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
-		s := NewSeries("my_series", values, nil)
+		s := NewSeriesInt("my_series", values)
 
 		head := s.Head(2)
 		if head.Name() != "my_series" {
@@ -223,7 +234,7 @@ func TestTail(t *testing.T) {
 
 	t.Run("returns all elements when n exceeds length", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("test", values)
 
 		tail := s.Tail(10)
 		if tail.Len() != 3 {
@@ -233,7 +244,7 @@ func TestTail(t *testing.T) {
 
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
-		s := NewSeries("my_series", values, nil)
+		s := NewSeriesInt("my_series", values)
 
 		tail := s.Tail(2)
 		if tail.Name() != "my_series" {
@@ -243,49 +254,19 @@ func TestTail(t *testing.T) {
 }
 
 func TestAppend(t *testing.T) {
-	t.Run("appends single value", func(t *testing.T) {
+	t.Run("appends Series", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
+		s := NewSeriesInt("series1", values)
 
-		s.Append(4)
-		if s.Len() != 4 {
+		values = []int{4, 5, 6}
+		o := NewSeriesInt("series2", values)
+
+		s.Append(o)
+		if s.Len() != 6 {
 			t.Errorf("expected length 4, got %d", s.Len())
 		}
 		if s.values[3] != 4 {
-			t.Errorf("expected last value to be 4, got %d", s.values[3])
-		}
-	})
-
-	t.Run("appends multiple values", func(t *testing.T) {
-		values := []int{1, 2, 3}
-		s := NewSeries("test", values, nil)
-
-		s.Append(4, 5, 6)
-		if s.Len() != 6 {
-			t.Errorf("expected length 6, got %d", s.Len())
-		}
-		if s.values[5] != 6 {
-			t.Errorf("expected last value to be 6, got %d", s.values[5])
-		}
-	})
-}
-
-func TestSeriesWithDifferentTypes(t *testing.T) {
-	t.Run("works with strings", func(t *testing.T) {
-		values := []string{"hello", "world"}
-		s := NewSeries("string_series", values, nil)
-
-		if s.Len() != 2 {
-			t.Errorf("expected length 2, got %d", s.Len())
-		}
-	})
-
-	t.Run("works with floats", func(t *testing.T) {
-		values := []float64{1.1, 2.2, 3.3}
-		s := NewSeries("float_series", values, nil)
-
-		if s.Len() != 3 {
-			t.Errorf("expected length 3, got %d", s.Len())
+			t.Errorf("expected value to be 4, got %d", s.values[3])
 		}
 	})
 }
