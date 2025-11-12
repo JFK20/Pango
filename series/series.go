@@ -6,79 +6,85 @@ import (
 )
 
 // A Series is basically an List which holds Data of a certain type but has extra capabilities
-type Series[T any] struct {
+type Series[T any, R any] struct {
 	name   string
 	values []T
-	index  []string
+	index  []R
 }
 
+type SeriesInt[T any] Series[T, int]
+
 // NewSeries creates an new Series
-func NewSeries[T any](name string, values []T, index []string) *Series[T] {
+func NewSeries[T any, R any](name string, values []T, index []R) *Series[T, R] {
 	if len(values) == 0 {
 		panic("cannot create Series with no data")
 	}
 
-	if index != nil && len(index) != len(values) {
+	if index == nil {
+		panic("needs an index if zou dont have one use SeriesInt")
+	}
+
+	if len(index) != len(values) {
 		panic("index length must match values length")
 	}
 
-	tmp := &Series[T]{
+	tmp := &Series[T, R]{
 		name:   name,
 		values: values,
 		index:  index,
 	}
 
-	if index == nil {
-		tmp.Index()
-	}
-
 	return tmp
 }
 
+func NewSeriesInt[T any](name string, values []T) *Series[T, int] {
+	return NewSeries[T, int](name, values, nil)
+}
+
 // Len return the length of the value slice
-func (s *Series[T]) Len() int {
+func (s *Series[T, R]) Len() int {
 	return len(s.values)
 }
 
 // Name return the name of the Series
-func (s *Series[T]) Name() string {
+func (s *Series[T, R]) Name() string {
 	return s.name
 }
 
 // SetName sets the Name od the Series
-func (s *Series[T]) SetName(name string) {
+func (s *Series[T, R]) SetName(name string) {
 	s.name = name
 }
 
 // Values returns the values of the series as an copy of the values slice
 // through the copy manipulation the original data is impossible
-func (s *Series[T]) Values() []T {
+func (s *Series[T, R]) Values() []T {
 	copied := make([]T, len(s.values))
 	copy(copied, s.values)
 	return copied
 }
 
-func (s *Series[T]) Index() []string {
+func (s *SeriesInt[T]) Index() []int {
 	if s.index == nil {
-		s.index = make([]string, s.Len())
+		s.index = make([]int, len(s.values))
 	}
 	for i := range s.index {
-		if s.index[i] == "" {
-			s.index[i] = fmt.Sprintf("%d", i)
+		if s.index[0] == 0 && i != 0 {
+			s.index[i] = i
 		}
 	}
 	return s.index
 }
 
-func (s *Series[T]) Get(i int) (string, any) {
+func (s *Series[T, R]) Get(i int) (R, T) {
 	if i < 0 || i >= s.Len() {
 		panic(fmt.Sprintf("index %d out of bounds", i))
 	}
-	label := s.Index()[i]
+	label := s.index[i]
 	return label, s.values[i]
 }
 
-func (s *Series[T]) String() string {
+func (s *Series[T, R]) String() string {
 	var sb strings.Builder
 
 	if s.name != "" {
@@ -102,14 +108,14 @@ func (s *Series[T]) String() string {
 	return sb.String()
 }
 
-func (s *Series[T]) Head(n int) *Series[T] {
+func (s *Series[T, R]) Head(n int) *Series[T, R] {
 	maxlength := n
 	if maxlength > s.Len() {
 		maxlength = s.Len()
 	}
 	name := s.name
 	values := make([]T, maxlength)
-	index := make([]string, maxlength)
+	index := make([]R, maxlength)
 	for i := 0; i < maxlength; i++ {
 		values[i] = s.values[i]
 		index[i] = s.index[i]
@@ -118,7 +124,7 @@ func (s *Series[T]) Head(n int) *Series[T] {
 	return NewSeries(name, values, index)
 }
 
-func (s *Series[T]) Tail(n int) *Series[T] {
+func (s *Series[T, R]) Tail(n int) *Series[T, R] {
 	length := s.Len()
 	maxlength := n
 	if maxlength > length {
