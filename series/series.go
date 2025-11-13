@@ -12,16 +12,14 @@ type Series[T any, R comparable] struct {
 	index  []R
 }
 
-type SeriesInt[T any] Series[T, int]
-
-// NewSeries creates an new Series
+// NewSeries creates a new Series
 func NewSeries[T any, R comparable](name string, values []T, index []R) *Series[T, R] {
 	if len(values) == 0 {
 		panic("cannot create Series with no data")
 	}
 
 	if index == nil {
-		panic("needs an index if you dont have one use SeriesInt")
+		panic("needs an index if you dont have one use IndexedSeries")
 	}
 
 	if len(index) != len(values) {
@@ -33,15 +31,6 @@ func NewSeries[T any, R comparable](name string, values []T, index []R) *Series[
 		values: values,
 		index:  index,
 	}
-}
-
-func NewSeriesInt[T any](name string, values []T) *Series[T, int] {
-	index := make([]int, len(values))
-	for i := range values {
-		index[i] = i
-	}
-
-	return NewSeries(name, values, index)
 }
 
 // Len return the length of the value slice
@@ -67,30 +56,53 @@ func (s *Series[T, R]) Values() []T {
 	return copied
 }
 
+// Index returns the index of the series as a copy of the index slice
 func (s *Series[T, R]) Index() []R {
 	copied := make([]R, len(s.index))
 	copy(copied, s.index)
 	return copied
 }
 
-func (s *Series[T, R]) IndexGet(label R) T {
+// Get returns the value for the given label
+func (s *Series[T, R]) Get(label R) T {
 	for i := range s.index {
 		if s.index[i] == label {
 			return s.values[i]
 		}
 	}
-	var zero T
-	return zero
+	panic(fmt.Sprintf("no value found for label %v", label))
 }
 
-func (s *Series[T, R]) Get(i int) (R, T) {
+// GetLabel returns the label and value for the given label
+//Not need as you already have your label
+/*func (s *Series[T, R]) GetLabel(label R) (R, T) {
+	for i := range s.index {
+		if s.index[i] == label {
+			return s.index[i], s.values[i]
+		}
+	}
+	var zero T
+	var zeroR R
+	return zeroR, zero
+}*/
+
+// At returns the value at the given index od the slice
+func (s *Series[T, R]) At(i int) T {
 	if i < 0 || i >= s.Len() {
 		panic(fmt.Sprintf("index %d out of bounds", i))
 	}
-	label := s.index[i]
-	return label, s.values[i]
+	return s.values[i]
 }
 
+// AtIndex returns the label and value at the given index of the slice
+func (s *Series[T, R]) AtIndex(i int) (R, T) {
+	if i < 0 || i >= s.Len() {
+		panic(fmt.Sprintf("index %d out of bounds", i))
+	}
+	return s.index[i], s.values[i]
+}
+
+// String returns a string representation of the Series
 func (s *Series[T, R]) String() string {
 	var sb strings.Builder
 
@@ -102,7 +114,7 @@ func (s *Series[T, R]) String() string {
 	maxLen := min(s.Len(), 10)
 
 	for i := range maxLen {
-		label, value := s.Get(i)
+		label, value := s.AtIndex(i)
 		sb.WriteString(fmt.Sprintf("%v: %v\n", label, value))
 	}
 
@@ -113,6 +125,7 @@ func (s *Series[T, R]) String() string {
 	return sb.String()
 }
 
+// Head returns the first n elements of the Series
 func (s *Series[T, R]) Head(n int) *Series[T, R] {
 	maxlength := min(n, s.Len())
 	name := s.name
@@ -126,6 +139,7 @@ func (s *Series[T, R]) Head(n int) *Series[T, R] {
 	return NewSeries(name, values, index)
 }
 
+// Tail returns the last n elements of the Series
 func (s *Series[T, R]) Tail(n int) *Series[T, R] {
 	length := s.Len()
 	maxlength := min(n, length)
@@ -143,7 +157,36 @@ func (s *Series[T, R]) Tail(n int) *Series[T, R] {
 	return NewSeries(name, values, index)
 }
 
+// Append appends another Series to the end of this Series
 func (s *Series[T, R]) Append(o *Series[T, R]) {
 	s.values = append(s.values, o.values...)
 	s.index = append(s.index, o.index...)
+}
+
+// Prepend prepends another Series to the beginning of this Series
+func (s *Series[T, R]) Prepend(o *Series[T, R]) {
+	s.values = append(o.values, s.values...)
+	s.index = append(o.index, s.index...)
+}
+
+// isEmpty checks if the series is empty
+func (s *Series[T, R]) isEmpty() bool {
+	return s.Len() == 0
+}
+
+// ResetIndex resets the index to default 0..n-1
+func (s *Series[T, R]) ResetIndex() *Series[T, int] {
+	newIndex := make([]int, s.Len())
+	for i := range newIndex {
+		newIndex[i] = i
+	}
+	return NewSeries[T, int](s.name, s.values, newIndex)
+}
+
+// SetIndex returns a new Series with the given index
+func SetIndex[T any, R comparable, S comparable](s *Series[T, R], newIndex []S) *Series[T, S] {
+	if len(newIndex) != s.Len() {
+		panic("new index length must match values length")
+	}
+	return NewSeries[T, S](s.name, s.values, newIndex)
 }
