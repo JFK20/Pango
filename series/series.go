@@ -41,7 +41,7 @@ func NewSeriesInt[T any](name string, values []T) *Series[T, int] {
 		index[i] = i
 	}
 
-	return NewSeries[T, int](name, values, index)
+	return NewSeries(name, values, index)
 }
 
 // Len return the length of the value slice
@@ -83,18 +83,6 @@ func (s *Series[T, R]) IndexGet(label R) T {
 	return zero
 }
 
-func (s *SeriesInt[T]) extendsIndex() []int {
-	if s.index == nil {
-		s.index = make([]int, len(s.values))
-	}
-	for i := range s.index {
-		if s.index[0] == 0 && i != 0 {
-			s.index[i] = i
-		}
-	}
-	return s.index
-}
-
 func (s *Series[T, R]) Get(i int) (R, T) {
 	if i < 0 || i >= s.Len() {
 		panic(fmt.Sprintf("index %d out of bounds", i))
@@ -110,12 +98,10 @@ func (s *Series[T, R]) String() string {
 		sb.WriteString(s.name + "\n")
 	}
 
-	maxLen := 10 // don't print more than 10 rows
-	if s.Len() < maxLen {
-		maxLen = s.Len()
-	}
+	// don't print more than 10 rows
+	maxLen := min(s.Len(), 10)
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		label, value := s.Get(i)
 		sb.WriteString(fmt.Sprintf("%v: %v\n", label, value))
 	}
@@ -128,14 +114,11 @@ func (s *Series[T, R]) String() string {
 }
 
 func (s *Series[T, R]) Head(n int) *Series[T, R] {
-	maxlength := n
-	if maxlength > s.Len() {
-		maxlength = s.Len()
-	}
+	maxlength := min(n, s.Len())
 	name := s.name
 	values := make([]T, maxlength)
 	index := make([]R, maxlength)
-	for i := 0; i < maxlength; i++ {
+	for i := range maxlength {
 		values[i] = s.values[i]
 		index[i] = s.index[i]
 	}
@@ -145,17 +128,14 @@ func (s *Series[T, R]) Head(n int) *Series[T, R] {
 
 func (s *Series[T, R]) Tail(n int) *Series[T, R] {
 	length := s.Len()
-	maxlength := n
-	if maxlength > length {
-		maxlength = length
-	}
+	maxlength := min(n, length)
 
 	name := s.name
 	values := make([]T, maxlength)
 	index := make([]R, maxlength)
 
 	start := length - maxlength
-	for i := 0; i < maxlength; i++ {
+	for i := range maxlength {
 		values[i] = s.values[start+i]
 		index[i] = s.index[start+i]
 	}
