@@ -161,6 +161,17 @@ func TestGet(t *testing.T) {
 		s := NewIndexSeries("test", values)
 		s.At(10)
 	})
+
+	t.Run("panics on out of bounds index", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for out of bounds index")
+			}
+		}()
+		values := []int{1, 2, 3}
+		s := NewIndexSeries("test", values)
+		s.AtIndex(3)
+	})
 }
 
 func TestSeries_IndexGet(t *testing.T) {
