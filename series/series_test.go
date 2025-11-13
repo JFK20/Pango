@@ -459,3 +459,208 @@ func TestIsEmpty(t *testing.T) {
 		}
 	})
 }
+
+func TestSortByIndex(t *testing.T) {
+	t.Run("sorts series in ascending order", func(t *testing.T) {
+		values := []int{30, 10, 20}
+		index := []string{"c", "a", "b"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByIndex(s, true)
+		sortedIndex := sorted.Index()
+		if sortedIndex[0] != "a" || sortedIndex[1] != "b" || sortedIndex[2] != "c" {
+			t.Error("series not sorted correctly in ascending order")
+		}
+	})
+
+	t.Run("sorts series in descending order", func(t *testing.T) {
+		values := []int{30, 10, 20}
+		index := []string{"c", "a", "b"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByIndex(s, false)
+		sortedIndex := sorted.Index()
+		if sortedIndex[0] != "c" || sortedIndex[1] != "b" || sortedIndex[2] != "a" {
+			t.Error("series not sorted correctly in descending order")
+		}
+	})
+}
+
+func TestSeries_IsIn(t *testing.T) {
+	t.Run("returns true if series contains index", func(t *testing.T) {
+		values := []int{10, 20, 30}
+		index := []string{"a", "b", "c"}
+		s := NewSeries("test", values, index)
+
+		if !s.IsIn(20) {
+			t.Error("expected IsIn to return true for existing value")
+		}
+	})
+
+	t.Run("returns false if series does not contain index", func(t *testing.T) {
+		values := []int{10, 20, 30}
+		index := []string{"a", "b", "c"}
+		s := NewSeries("test", values, index)
+
+		if s.IsIn(40) {
+			t.Error("expected IsIn to return false for non-existing value")
+		}
+	})
+}
+
+func TestSortByValue(t *testing.T) {
+	t.Run("sorts by integer values ascending", func(t *testing.T) {
+		values := []int{30, 10, 20}
+		index := []string{"c", "a", "b"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, true)
+
+		// Check values are sorted
+		expectedValues := []int{10, 20, 30}
+		expectedIndex := []string{"a", "b", "c"}
+
+		vals := sorted.Values()
+		for i, exp := range expectedValues {
+			if vals[i] != exp {
+				t.Errorf("expected value %d at position %d, got %d", exp, i, vals[i])
+			}
+		}
+
+		// Check index is reordered accordingly
+		idx := sorted.Index()
+		for i, exp := range expectedIndex {
+			if idx[i] != exp {
+				t.Errorf("expected label %s at position %d, got %s", exp, i, idx[i])
+			}
+		}
+	})
+
+	t.Run("sorts by integer values descending", func(t *testing.T) {
+		values := []int{30, 10, 20}
+		index := []string{"c", "a", "b"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, false)
+
+		// Check values are sorted descending
+		expectedValues := []int{30, 20, 10}
+		expectedIndex := []string{"c", "b", "a"}
+
+		vals := sorted.Values()
+		for i, exp := range expectedValues {
+			if vals[i] != exp {
+				t.Errorf("expected value %d at position %d, got %d", exp, i, vals[i])
+			}
+		}
+
+		// Check index is reordered accordingly
+		idx := sorted.Index()
+		for i, exp := range expectedIndex {
+			if idx[i] != exp {
+				t.Errorf("expected label %s at position %d, got %s", exp, i, idx[i])
+			}
+		}
+	})
+
+	t.Run("sorts by string values ascending", func(t *testing.T) {
+		values := []string{"zebra", "apple", "mango"}
+		index := []int{3, 1, 2}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, true)
+
+		// Check values are sorted
+		expectedValues := []string{"apple", "mango", "zebra"}
+		expectedIndex := []int{1, 2, 3}
+
+		vals := sorted.Values()
+		for i, exp := range expectedValues {
+			if vals[i] != exp {
+				t.Errorf("expected value %s at position %d, got %s", exp, i, vals[i])
+			}
+		}
+
+		// Check index is reordered accordingly
+		idx := sorted.Index()
+		for i, exp := range expectedIndex {
+			if idx[i] != exp {
+				t.Errorf("expected label %d at position %d, got %d", exp, i, idx[i])
+			}
+		}
+	})
+
+	t.Run("sorts by string values descending", func(t *testing.T) {
+		values := []string{"zebra", "apple", "mango"}
+		index := []int{3, 1, 2}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, false)
+
+		// Check values are sorted descending
+		expectedValues := []string{"zebra", "mango", "apple"}
+		expectedIndex := []int{3, 2, 1}
+
+		vals := sorted.Values()
+		for i, exp := range expectedValues {
+			if vals[i] != exp {
+				t.Errorf("expected value %s at position %d, got %s", exp, i, vals[i])
+			}
+		}
+
+		// Check index is reordered accordingly
+		idx := sorted.Index()
+		for i, exp := range expectedIndex {
+			if idx[i] != exp {
+				t.Errorf("expected label %d at position %d, got %d", exp, i, idx[i])
+			}
+		}
+	})
+
+	t.Run("original series is not modified", func(t *testing.T) {
+		values := []int{30, 10, 20}
+		index := []string{"c", "a", "b"}
+		s := NewSeries("test", values, index)
+
+		originalFirst := s.At(0)
+		SortByValue(s, true)
+
+		if s.At(0) != originalFirst {
+			t.Error("original series should not be modified")
+		}
+	})
+
+	t.Run("handles series with duplicate values", func(t *testing.T) {
+		values := []int{20, 10, 20, 10}
+		index := []string{"a", "b", "c", "d"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, true)
+
+		// Check that all values are present
+		if sorted.Len() != 4 {
+			t.Errorf("expected length 4, got %d", sorted.Len())
+		}
+
+		// Check values are sorted
+		vals := sorted.Values()
+		if vals[0] != 10 || vals[1] != 10 || vals[2] != 20 || vals[3] != 20 {
+			t.Error("values not sorted correctly with duplicates")
+		}
+	})
+
+	t.Run("handles single element series", func(t *testing.T) {
+		values := []int{42}
+		index := []string{"answer"}
+		s := NewSeries("test", values, index)
+
+		sorted := SortByValue(s, true)
+
+		if sorted.Len() != 1 {
+			t.Errorf("expected length 1, got %d", sorted.Len())
+		}
+		if sorted.At(0) != 42 {
+			t.Errorf("expected value 42, got %d", sorted.At(0))
+		}
+	})
+}

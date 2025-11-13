@@ -1,19 +1,21 @@
 package series
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 )
 
 // A Series is basically a List which holds Data of a certain type but has extra capabilities
-type Series[T any, R comparable] struct {
+type Series[T comparable, R comparable] struct {
 	name   string
 	values []T
 	index  []R
 }
 
 // NewSeries creates a new Series
-func NewSeries[T any, R comparable](name string, values []T, index []R) *Series[T, R] {
+func NewSeries[T comparable, R comparable](name string, values []T, index []R) *Series[T, R] {
 	if len(values) == 0 {
 		panic("cannot create Series with no data")
 	}
@@ -184,9 +186,86 @@ func (s *Series[T, R]) ResetIndex() *Series[T, int] {
 }
 
 // SetIndex returns a new Series with the given index
-func SetIndex[T any, R comparable, S comparable](s *Series[T, R], newIndex []S) *Series[T, S] {
+func SetIndex[T comparable, R comparable, S comparable](s *Series[T, R], newIndex []S) *Series[T, S] {
 	if len(newIndex) != s.Len() {
 		panic("new index length must match values length")
 	}
 	return NewSeries[T, S](s.name, s.values, newIndex)
+}
+
+// SortByIndex sorts the Series by its labels
+// Returns a new sorted Series, the original Series is not modified
+// asc: true for ascending order, false for descending order
+func SortByIndex[T comparable, R cmp.Ordered](s *Series[T, R], asc bool) *Series[T, R] {
+	// Create pairs of index and value
+	type pair struct {
+		label R
+		value T
+	}
+
+	pairs := make([]pair, s.Len())
+	for i := range s.Len() {
+		pairs[i] = pair{label: s.index[i], value: s.values[i]}
+	}
+
+	// Sort pairs by label
+	slices.SortFunc(pairs, func(a, b pair) int {
+		if asc {
+			return cmp.Compare(a.label, b.label)
+		}
+		return cmp.Compare(b.label, a.label)
+	})
+
+	// Extract sorted values and index
+	sortedValues := make([]T, s.Len())
+	sortedIndex := make([]R, s.Len())
+	for i, p := range pairs {
+		sortedValues[i] = p.value
+		sortedIndex[i] = p.label
+	}
+
+	return NewSeries(s.name, sortedValues, sortedIndex)
+}
+
+// SortByValue sorts the Series by its values
+// Returns a new sorted Series, the original Series is not modified
+// asc: true for ascending order, false for descending order
+func SortByValue[T cmp.Ordered, R comparable](s *Series[T, R], asc bool) *Series[T, R] {
+	// Create pairs of index and value
+	type pair struct {
+		label R
+		value T
+	}
+
+	pairs := make([]pair, s.Len())
+	for i := range s.Len() {
+		pairs[i] = pair{label: s.index[i], value: s.values[i]}
+	}
+
+	// Sort pairs by value
+	slices.SortFunc(pairs, func(a, b pair) int {
+		if asc {
+			return cmp.Compare(a.value, b.value)
+		}
+		return cmp.Compare(b.value, a.value)
+	})
+
+	// Extract sorted values and index
+	sortedValues := make([]T, s.Len())
+	sortedIndex := make([]R, s.Len())
+	for i, p := range pairs {
+		sortedValues[i] = p.value
+		sortedIndex[i] = p.label
+	}
+
+	return NewSeries(s.name, sortedValues, sortedIndex)
+}
+
+func (s *Series[T, R]) IsIn(find T) bool {
+	for i := range s.values {
+		if s.values[i] == find {
+			return true
+		}
+	}
+	return false
 }
