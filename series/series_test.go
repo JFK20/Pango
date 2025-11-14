@@ -664,3 +664,77 @@ func TestSortByValue(t *testing.T) {
 		}
 	})
 }
+
+func TestCopy(t *testing.T) {
+	t.Run("creates a deep copy of the series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4, 5}
+		index := []string{"a", "b", "c", "d", "e"}
+		s := NewSeries("test", values, index)
+
+		copied := s.Copy()
+
+		// Check that the copy has the same length
+		if copied.Len() != s.Len() {
+			t.Errorf("expected copied series length %d, got %d", s.Len(), copied.Len())
+		}
+
+		// Check that the copy has the same name
+		if copied.Name() != s.Name() {
+			t.Errorf("expected copied series name '%s', got '%s'", s.Name(), copied.Name())
+		}
+
+		// Check that values are the same
+		for i := 0; i < s.Len(); i++ {
+			if copied.At(i) != s.At(i) {
+				t.Errorf("expected value %d at position %d, got %d", s.At(i), i, copied.At(i))
+			}
+		}
+
+		// Check that index is the same
+		originalIndex := s.Index()
+		copiedIndex := copied.Index()
+		for i := 0; i < s.Len(); i++ {
+			if copiedIndex[i] != originalIndex[i] {
+				t.Errorf("expected index %s at position %d, got %s", originalIndex[i], i, copiedIndex[i])
+			}
+		}
+
+		// check that modifying the copy does not affect the original
+		copied.SetName("modified")
+		if s.Name() == "modified" {
+			t.Error("modifying copy name should not affect original series name")
+		}
+
+		// check that modifying the copy values does not affect the original
+		copiedValues := copied.Values()
+		copiedValues[0] = 999
+		if s.At(0) == 999 {
+			t.Error("modifying copy values should not affect original series values")
+		}
+
+		// check that modifying the copy index does not affect the original
+		copiedIndex = copied.Index()
+		copiedIndex[0] = "modified"
+		originalIndex = s.Index()
+		if originalIndex[0] == "modified" {
+			t.Error("modifying copy index should not affect original series index")
+		}
+
+		// check that modifying the original does not affect the copy
+		s.SetName("original_modified")
+		if copied.Name() == "original_modified" {
+			t.Error("modifying original name should not affect copy series name")
+		}
+
+		s.values[0] = 888
+		if copied.At(0) == 888 {
+			t.Error("modifying original values should not affect copy series values")
+		}
+
+		s.index[0] = "original_changed"
+		copiedIndex = copied.Index()
+		if copiedIndex[0] == "original_changed" {
+			t.Error("modifying original index should not affect copy series index")
+		}
+	})
+}

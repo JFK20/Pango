@@ -261,6 +261,7 @@ func SortByValue[T cmp.Ordered, R comparable](s *Series[T, R], asc bool) *Series
 	return NewSeries(s.name, sortedValues, sortedIndex)
 }
 
+// IsIn checks if the given value is in the Series
 func (s *Series[T, R]) IsIn(find T) bool {
 	for i := range s.values {
 		if s.values[i] == find {
@@ -268,4 +269,15 @@ func (s *Series[T, R]) IsIn(find T) bool {
 		}
 	}
 	return false
+}
+
+// Copy creates a deep copy of the Series
+func (s *Series[T, R]) Copy() *Series[T, R] {
+	copiedValues := make([]T, s.Len())
+	copy(copiedValues, s.values)
+
+	copiedIndex := make([]R, s.Len())
+	copy(copiedIndex, s.index)
+
+	return NewSeries(s.name, copiedValues, copiedIndex)
 }
