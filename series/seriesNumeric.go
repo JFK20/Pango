@@ -1,6 +1,10 @@
 package series
 
-import "math"
+import (
+	"fmt"
+	"math"
+	"reflect"
+)
 
 type Numeric interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
@@ -108,40 +112,95 @@ func (ns *NumericSeries[T, R]) Abs() *NumericSeries[T, R] {
 	return NewNumericSeries[T, R](ns.name, absValues, ns.index)
 }
 
-// Add adds two NumericSeries element-wise
+// Operation executes a custom operation on two NumericSeries element-wise
 // use an empty string for name to get the default name
-func (ns *NumericSeries[T, R]) Add(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
+func (ns *NumericSeries[T, R]) Operation(other *NumericSeries[T, R], op func(a, b T) T, name string) *NumericSeries[T, R] {
 	if ns.Len() != other.Len() {
-		panic("series must be of the same length to add")
+		panic("series must be of the same length to perform operation")
 	}
 
 	if name == "" {
-		name = ns.name + "_add_" + other.name
+		name = ns.name + "_op_" + other.name
 	}
 
 	resultValues := make([]T, ns.Len())
 	for i := range ns.values {
-		resultValues[i] = ns.values[i] + other.values[i]
+		resultValues[i] = op(ns.values[i], other.values[i])
 	}
 	return NewNumericSeries[T, R](name, resultValues, ns.index)
+}
+
+// Add adds two NumericSeries element-wise
+// use an empty string for name to get the default name
+func (ns *NumericSeries[T, R]) Add(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
+	addfunc := func(a, b T) T {
+		return a + b
+	}
+	return ns.Operation(other, addfunc, name)
 }
 
 // Subtract subtracts two NumericSeries element-wise
 // use an empty string for name to get the default name
 func (ns *NumericSeries[T, R]) Subtract(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
-	if ns.Len() != other.Len() {
-		panic("series must be of the same length to subtract")
+	subtractfunc := func(a, b T) T {
+		return a - b
+	}
+	return ns.Operation(other, subtractfunc, name)
+}
+
+// Multiply multiplies two NumericSeries element-wise
+// use an empty string for name to get the default name
+func (ns *NumericSeries[T, R]) Multiply(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
+	multiplyfunc := func(a, b T) T {
+		return a * b
+	}
+	return ns.Operation(other, multiplyfunc, name)
+}
+
+// Divide divides two NumericSeries element-wise
+// use an empty string for name to get the default name
+func (ns *NumericSeries[T, R]) Divide(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
+	dividefunc := func(a, b T) T {
+		return a / b
+	}
+	return ns.Operation(other, dividefunc, name)
+}
+
+// Mod does modulus of two NumericSeries element-wise
+// use an empty string for name to get the default name
+func (ns *NumericSeries[T, R]) Mod(other *NumericSeries[T, R], name string) *NumericSeries[T, R] {
+	var zero T
+	switch any(zero).(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		// ok, continue
+	default:
+		panic("modulus operation only supported for whole number types")
 	}
 
+	modfunc := func(a, b T) T {
+		// Use reflection to perform modulus
+		aVal := reflect.ValueOf(a)
+		bVal := reflect.ValueOf(b)
+
+		result := aVal.Int() % bVal.Int()
+		return reflect.ValueOf(result).Convert(reflect.TypeOf(a)).Interface().(T)
+	}
+	return ns.Operation(other, modfunc, name)
+}
+
+// Pow raises each element of the Series to the given power
+func (ns *NumericSeries[T, R]) Pow(power float64, name string) *NumericSeries[T, R] {
 	if name == "" {
-		name = ns.name + "_sub_" + other.name
+		name = fmt.Sprintf("%v_pow(%v)", ns.name, power)
 	}
 
-	resultValues := make([]T, ns.Len())
-	for i := range ns.values {
-		resultValues[i] = ns.values[i] - other.values[i]
+	powValues := make([]T, ns.Len())
+	for i, v := range ns.values {
+		result := math.Pow(float64(v), power)
+		powValues[i] = T(result)
 	}
-	return NewNumericSeries[T, R](name, resultValues, ns.index)
+
+	return NewNumericSeries[T, R](name, powValues, ns.index)
 }
 
 // ArgMax returns the index position of the largest value in the Series
@@ -226,4 +285,43 @@ func (ns *NumericSeries[T, R]) DropNA() *NumericSeries[T, R] {
 	}
 
 	return NewNumericSeries[T, R](ns.name, validValues, validIndex)
+}
+
+// CoVariance computes the covariance between two NumericSeries
+// dof is degrees of freedom, typically 0 for population(complete set) and 1 for sample(uncomplete set)
+func (ns *NumericSeries[T, R]) CoVariance(other *NumericSeries[T, R], dof int) float64 {
+	if ns.Len() != other.Len() {
+		panic("series must be of the same length to compute covariance")
+	}
+
+	if dof < 0 {
+		panic("degrees of freedom must be non-negative")
+	}
+
+	meanX := ns.Mean()
+	meanY := other.Mean()
+
+	var covSum float64
+	for i := 0; i < ns.Len(); i++ {
+		covSum += (float64(ns.values[i]) - meanX) * (float64(other.values[i]) - meanY)
+	}
+	return covSum / float64(ns.Len()-dof)
+}
+
+// Correlation computes the Pearson correlation coefficient between two NumericSeries
+func (ns *NumericSeries[T, R]) Correlation(other *NumericSeries[T, R]) float64 {
+	if ns.Len() != other.Len() {
+		panic("series must be of the same length to compute correlation")
+	}
+
+	stdX := ns.StdDev(0)
+	stdY := other.StdDev(0)
+	coVariance := ns.CoVariance(other, 0)
+
+	denominator := stdX * stdY
+	if denominator != 0 {
+		return coVariance / denominator
+	}
+
+	return 0.0
 }
