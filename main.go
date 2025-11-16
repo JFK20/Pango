@@ -8,24 +8,24 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Example 1: Coloum sum ===")
+	fmt.Println("=== Example 1: Column sum ===")
 	example1SumColumn()
 
-	fmt.Println("\n=== Example 2: add to columns and save it in a third ===")
-	example2_AddColumns()
+	fmt.Println("\n=== Example 2: add two columns and save it in a third ===")
+	example2AddColumns()
 
 	fmt.Println("\n=== Example 3: multiple arithmetic operations ===")
-	example3_MultipleOperations()
+	example3Multipleoperations()
 }
 
-// Beispiel 1: Eine Spalte summieren
+// Example 1: Sum a column
 func example1SumColumn() {
-	// Erstelle Series für ein DataFrame
+	// Create Series for a DataFrame
 	names := series.NewIndexSeries("Name", []string{"Alice", "Bob", "Charlie", "David"})
 	sales := series.NewIndexNumericSeries("sales", []int{100, 150, 200, 175})
 	revenue := series.NewIndexNumericSeries("revenue", []float64{1500.50, 2250.75, 3000.00, 2625.25})
 
-	// Erstelle DataFrame
+	// Create DataFrame
 	df, err := dataframe.NewDataFrame(names, sales, revenue)
 	if err != nil {
 		fmt.Println("Error during DataFrame creation:", err)
@@ -35,7 +35,7 @@ func example1SumColumn() {
 	fmt.Println("DataFrame:")
 	fmt.Println(df)
 
-	// sum the sales-column
+	// sum the sales column
 	salesCol, err := df.GetNumericColumn("sales")
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -43,7 +43,7 @@ func example1SumColumn() {
 	}
 
 	salesSum := salesCol.SumFloat()
-	fmt.Printf("\nsumSales: %.0f\n", salesSum)
+	fmt.Printf("\nTotal Sales: %.0f\n", salesSum)
 
 	// sum the revenue value
 	revenueCol, err := df.GetNumericColumn("revenue")
@@ -56,55 +56,55 @@ func example1SumColumn() {
 	fmt.Printf("Total Revenue: %.2f €\n", revenueSum)
 }
 
-// Beispiel 2: Zwei Spalten addieren und in einer dritten speichern
-func example2_AddColumns() {
-	// Erstelle Mitarbeiter-DataFrame mit Grundgehalt und Bonus
-	mitarbeiter := series.NewIndexSeries("Mitarbeiter", []string{"Anna", "Ben", "Clara", "Daniel"})
-	grundgehalt := series.NewIndexNumericSeries("Grundgehalt", []float64{3000, 3500, 4000, 3200})
+// Example 2: Add two columns and save in a third
+func example2AddColumns() {
+	// Create employee DataFrame with base salary and bonus
+	employees := series.NewIndexSeries("employees", []string{"Anna", "Ben", "Clara", "Daniel"})
+	baseSalary := series.NewIndexNumericSeries("baseSalary", []float64{3000, 3500, 4000, 3200})
 	bonus := series.NewIndexNumericSeries("Bonus", []float64{500, 750, 1000, 600})
 
-	// Erstelle DataFrame
-	df, err := dataframe.NewDataFrame(mitarbeiter, grundgehalt, bonus)
+	// Create DataFrame
+	df, err := dataframe.NewDataFrame(employees, baseSalary, bonus)
 	if err != nil {
-		fmt.Println("Fehler:", err)
+		fmt.Println("Error:", err)
 		return
 	}
 
-	fmt.Println("DataFrame (vorher):")
+	fmt.Println("DataFrame (before):")
 	fmt.Println(df)
 
-	// Hole die beiden Spalten
-	grundgehaltCol, _ := df.GetNumericColumn("Grundgehalt")
+	// Get the two columns
+	baseWageCol, _ := df.GetNumericColumn("baseSalary")
 	bonusCol, _ := df.GetNumericColumn("Bonus")
 
-	// Konvertiere zu float64 NumericSeries
-	grundgehaltFloat := grundgehaltCol.(*series.NumericSeries[float64, int])
+	// Convert to float64 NumericSeries
+	baseWageFloat := baseWageCol.(*series.NumericSeries[float64, int])
 	bonusFloat := bonusCol.(*series.NumericSeries[float64, int])
 
-	// Addiere die beiden Spalten
-	gesamtgehalt := grundgehaltFloat.Add(bonusFloat, "Gesamtgehalt")
+	// Add the two columns
+	totalSalary := baseWageFloat.Add(bonusFloat, "TotalSalary")
 
-	// Füge die neue Spalte zum DataFrame hinzu
-	err = df.AddColumn(gesamtgehalt)
+	// Add the new column to the DataFrame
+	err = df.AddColumn(totalSalary)
 	if err != nil {
-		fmt.Println("Fehler beim Hinzufügen der Spalte:", err)
+		fmt.Println("Error adding column:", err)
 		return
 	}
 
-	fmt.Println("\nDataFrame (nachher - mit Gesamtgehalt):")
+	fmt.Println("\nDataFrame (after - with TotalSalary):")
 	fmt.Println(df)
 
-	// Zeige die Summe aller Gesamtgehälter
-	gesamtgehaltCol, _ := df.GetNumericColumn("Gesamtgehalt")
-	totalSum := gesamtgehaltCol.SumFloat()
-	fmt.Printf("\nGesamte Lohnkosten: %.2f €\n", totalSum)
+	// Show the sum of all total salaries
+	totalSalaryCol, _ := df.GetNumericColumn("TotalSalary")
+	totalSum := totalSalaryCol.SumFloat()
+	fmt.Printf("\nTotal Labor Costs: %.2f €\n", totalSum)
 }
 
 // Example 3: Multiple arithmetic operations
-func example3_MultipleOperations() {
+func example3Multipleoperations() {
 	// Create product DataFrame
 	products := series.NewIndexSeries[string]("Product", []string{"Widget A", "Widget B", "Widget C"})
-	price := series.NewIndexNumericSeries("Price", []float64{19.99, 29.99, 39.99})
+	price := series.NewIndexNumericSeries("Price", []float64{20, 30.50, 38.09})
 	quantity := series.NewIndexNumericSeries("Quantity", []int{100, 150, 75})
 
 	df, err := dataframe.NewDataFrame(products, price, quantity)
