@@ -325,3 +325,25 @@ func (ns *NumericSeries[T, R]) Correlation(other *NumericSeries[T, R]) float64 {
 
 	return 0.0
 }
+
+// NumericSeriesInterface compatibility methods
+
+// SumFloat returns the sum as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) SumFloat() float64 {
+	return float64(ns.Sum())
+}
+
+// MinFloat returns the minimum value as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) MinFloat() float64 {
+	return float64(ns.Min())
+}
+
+// MaxFloat returns the maximum value as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) MaxFloat() float64 {
+	return float64(ns.Max())
+}
+
+// Count returns the number of elements (same as Len)
+func (ns *NumericSeries[T, R]) Count() int {
+	return ns.Len()
+}
