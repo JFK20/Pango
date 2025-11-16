@@ -25,7 +25,7 @@ func (df *DataFrame) GroupBy(columnName string) (*DataFrameGroupBy, error) {
 	seenKeys := make(map[any]bool)
 
 	for i := 0; i < df.nrows; i++ {
-		key := series.At(i)
+		key := series.AtAny(i)
 
 		if !seenKeys[key] {
 			groupKeys = append(groupKeys, key)
@@ -88,7 +88,7 @@ func AggCount(s SeriesInterface) any {
 // AggFirst returns the first value in the series
 func AggFirst(s SeriesInterface) any {
 	if s.Len() > 0 {
-		return s.At(0)
+		return s.AtAny(0)
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func AggFirst(s SeriesInterface) any {
 // AggLast returns the last value in the series
 func AggLast(s SeriesInterface) any {
 	if s.Len() > 0 {
-		return s.At(s.Len() - 1)
+		return s.AtAny(s.Len() - 1)
 	}
 	return nil
 }
@@ -341,7 +341,7 @@ func (gb *DataFrameGroupBy) extractSubSeries(columnName string, rowIndices []int
 	index := make([]any, len(rowIndices))
 
 	for i, rowIdx := range rowIndices {
-		idx, val := series.AtIndex(rowIdx)
+		idx, val := series.AtIndexAny(rowIdx)
 		index[i] = idx
 		values[i] = val
 	}
