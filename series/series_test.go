@@ -738,3 +738,144 @@ func TestCopy(t *testing.T) {
 		}
 	})
 }
+
+func TestCopyAny(t *testing.T) {
+	t.Run("creates a copy through interface", func(t *testing.T) {
+		values := []string{"apple", "banana", "cherry"}
+		index := []int{10, 20, 30}
+		s := NewSeries("fruits", values, index)
+
+		copied := s.CopyAny()
+
+		if copied == nil {
+			t.Fatal("expected copy to be created")
+		}
+
+		if copied.Name() != s.Name() {
+			t.Errorf("expected name %s, got %s", s.Name(), copied.Name())
+		}
+
+		if copied.Len() != s.Len() {
+			t.Errorf("expected length %d, got %d", s.Len(), copied.Len())
+		}
+	})
+}
+
+func TestValuesAny(t *testing.T) {
+	t.Run("returns values as []any for int series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4}
+		index := []string{"a", "b", "c", "d"}
+		s := NewSeries("test", values, index)
+
+		result := s.ValuesAny()
+
+		if len(result) != len(values) {
+			t.Errorf("expected length %d, got %d", len(values), len(result))
+		}
+
+		for i, v := range values {
+			if result[i] != v {
+				t.Errorf("expected value %v at index %d, got %v", v, i, result[i])
+			}
+		}
+	})
+}
+
+func TestIndexAny(t *testing.T) {
+	t.Run("returns index as []any for string index", func(t *testing.T) {
+		values := []int{10, 20, 30}
+		index := []string{"a", "b", "c"}
+		s := NewSeries("test", values, index)
+
+		result := s.IndexAny()
+
+		if len(result) != len(index) {
+			t.Errorf("expected length %d, got %d", len(index), len(result))
+		}
+
+		for i, idx := range index {
+			if result[i] != idx {
+				t.Errorf("expected index %v at position %d, got %v", idx, i, result[i])
+			}
+		}
+	})
+}
+
+func TestAtAny(t *testing.T) {
+	t.Run("returns value at index as any", func(t *testing.T) {
+		values := []string{"first", "second", "third"}
+		index := []int{1, 2, 3}
+		s := NewSeries("test", values, index)
+
+		result := s.AtAny(0)
+		if result != "first" {
+			t.Errorf("expected 'first', got %v", result)
+		}
+
+		result = s.AtAny(2)
+		if result != "third" {
+			t.Errorf("expected 'third', got %v", result)
+		}
+	})
+}
+
+func TestAtIndexAny(t *testing.T) {
+	t.Run("returns label and value as any", func(t *testing.T) {
+		values := []int{100, 200, 300}
+		index := []string{"x", "y", "z"}
+		s := NewSeries("test", values, index)
+
+		label, value := s.AtIndexAny(0)
+		if label != "x" {
+			t.Errorf("expected label 'x', got %v", label)
+		}
+		if value != 100 {
+			t.Errorf("expected value 100, got %v", value)
+		}
+
+		label, value = s.AtIndexAny(2)
+		if label != "z" {
+			t.Errorf("expected label 'z', got %v", label)
+		}
+		if value != 300 {
+			t.Errorf("expected value 300, got %v", value)
+		}
+	})
+}
+
+func TestGetValueType(t *testing.T) {
+	t.Run("returns correct type for int values", func(t *testing.T) {
+		values := []int{1, 2, 3}
+		index := []string{"a", "b", "c"}
+		s := NewSeries("test", values, index)
+
+		typeStr := s.GetValueType()
+		if typeStr != "int" {
+			t.Errorf("expected 'int', got %s", typeStr)
+		}
+	})
+}
+
+func TestGetIndexType(t *testing.T) {
+	t.Run("returns correct type for string index", func(t *testing.T) {
+		values := []int{1, 2, 3}
+		index := []string{"a", "b", "c"}
+		s := NewSeries("test", values, index)
+
+		typeStr := s.GetIndexType()
+		if typeStr != "string" {
+			t.Errorf("expected 'string', got %s", typeStr)
+		}
+	})
+
+	t.Run("returns correct type for int index", func(t *testing.T) {
+		values := []string{"x", "y", "z"}
+		index := []int{10, 20, 30}
+		s := NewSeries("test", values, index)
+
+		typeStr := s.GetIndexType()
+		if typeStr != "int" {
+			t.Errorf("expected 'int', got %s", typeStr)
+		}
+	})
+}

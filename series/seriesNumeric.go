@@ -33,7 +33,7 @@ func NewIndexNumericSeries[T Numeric](name string, values []T) *NumericSeries[T,
 
 // Sum returns the sum of the Series
 func (ns *NumericSeries[T, R]) Sum() T {
-	var sum T
+	sum := T(0)
 	for _, v := range ns.values {
 		sum += v
 	}

@@ -284,12 +284,12 @@ func (s *Series[T, R]) Copy() *Series[T, R] {
 	return NewSeries(s.name, copiedValues, copiedIndex)
 }
 
-// Copy creates a deep copy of the Series for interface compatibility
+// CopyAny creates a deep copy of the Series for interface compatibility
 func (s *Series[T, R]) CopyAny() dataframe.SeriesInterface {
 	return s.Copy()
 }
 
-// Values returns the values of the series as []any for interface compatibility
+// ValuesAny returns the values of the series as []any for interface compatibility
 func (s *Series[T, R]) ValuesAny() []any {
 	result := make([]any, len(s.values))
 	for i, v := range s.values {
@@ -298,7 +298,7 @@ func (s *Series[T, R]) ValuesAny() []any {
 	return result
 }
 
-// Index returns the index of the series as []any for interface compatibility
+// IndexAny returns the index of the series as []any for interface compatibility
 func (s *Series[T, R]) IndexAny() []any {
 	result := make([]any, len(s.index))
 	for i, idx := range s.index {
@@ -307,12 +307,12 @@ func (s *Series[T, R]) IndexAny() []any {
 	return result
 }
 
-// At returns the value at the given index as any for interface compatibility
+// AtAny returns the value at the given index as any for interface compatibility
 func (s *Series[T, R]) AtAny(i int) any {
 	return s.At(i)
 }
 
-// AtIndex returns the label and value at the given index as any for interface compatibility
+// AtIndexAny returns the label and value at the given index as any for interface compatibility
 func (s *Series[T, R]) AtIndexAny(i int) (any, any) {
 	label, value := s.AtIndex(i)
 	return label, value

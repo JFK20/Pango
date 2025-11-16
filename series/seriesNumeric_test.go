@@ -1153,3 +1153,66 @@ func TestNumericSeries_Correlation(t *testing.T) {
 		ns1.Correlation(ns2)
 	})
 }
+
+func TestSumFloat(t *testing.T) {
+	t.Run("sums float values as float64", func(t *testing.T) {
+		values := []float64{1.5, 2.5, 3.5}
+		ns := NewIndexNumericSeries("test", values)
+
+		sum := ns.SumFloat()
+		expected := 7.5
+		if math.Abs(sum-expected) > 0.0001 {
+			t.Errorf("expected sum %f, got %f", expected, sum)
+		}
+	})
+
+	t.Run("sums negative values as float64", func(t *testing.T) {
+		values := []int{-10, -20, -30}
+		ns := NewIndexNumericSeries("test", values)
+
+		sum := ns.SumFloat()
+		expected := -60.0
+		if sum != expected {
+			t.Errorf("expected sum %f, got %f", expected, sum)
+		}
+	})
+}
+
+func TestMinFloat(t *testing.T) {
+	t.Run("finds minimum integer value as float64", func(t *testing.T) {
+		values := []int{5, 2, 8, 1, 9}
+		ns := NewIndexNumericSeries("test", values)
+
+		minimum := ns.MinFloat()
+		expected := 1.0
+		if minimum != expected {
+			t.Errorf("expected minimum %f, got %f", expected, minimum)
+		}
+	})
+}
+
+func TestMaxFloat(t *testing.T) {
+	t.Run("finds maximum integer value as float64", func(t *testing.T) {
+		values := []int{5, 2, 8, 1, 9}
+		ns := NewIndexNumericSeries("test", values)
+
+		maximum := ns.MaxFloat()
+		expected := 9.0
+		if maximum != expected {
+			t.Errorf("expected maximum %f, got %f", expected, maximum)
+		}
+	})
+}
+
+func TestCount(t *testing.T) {
+	t.Run("counts elements in integer series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4, 5}
+		ns := NewIndexNumericSeries("test", values)
+
+		count := ns.Count()
+		expected := 5
+		if count != expected {
+			t.Errorf("expected count %d, got %d", expected, count)
+		}
+	})
+}
