@@ -2,6 +2,7 @@ package dataframe
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 )
@@ -208,8 +209,10 @@ func (df *DataFrame) RenameColumn(oldName, newName string) error {
 		return fmt.Errorf("column %s already exists", newName)
 	}
 
-	// Update map
-	s := df.columns[oldName]
+	// Update map. Rename on a copy so we don't mutate a series object the
+	// caller may still hold a reference to (columns are stored by reference,
+	// not copied, when a DataFrame is constructed).
+	s := df.columns[oldName].CopyAny()
 	s.SetName(newName)
 	df.columns[newName] = s
 	delete(df.columns, oldName)
@@ -419,17 +422,82 @@ func createSubseries(s SeriesInterface, start, end int) SeriesInterface {
 	return createSeriesFromAny(s.Name(), newValues, newIndex, s.GetValueType(), s.GetIndexType())
 }
 
-// createSeriesFromAny creates a SeriesInterface from []any slices
-// This uses reflection to create properly typed Series
+// createSeriesFromAny creates a SeriesInterface from []any slices.
+// If every non-nil value is numeric, it returns a genericNumericSeries so
+// that the result still satisfies NumericSeriesInterface (needed for Head,
+// Tail, FilterColumn, ApplyToColumn and every groupby aggregation, which all
+// route their per-row/per-group data through this function).
 func createSeriesFromAny(name string, values []any, index []any, valueType, indexType string) SeriesInterface {
-	// For now, return a generic wrapper
-	return &genericSeries{
+	base := genericSeries{
 		name:      name,
 		values:    values,
 		index:     index,
 		valueType: valueType,
 		indexType: indexType,
 	}
+	if isNumericValues(values) {
+		return &genericNumericSeries{genericSeries: base}
+	}
+	return &base
+}
+
+// toFloat64 converts a boxed numeric value to float64.
+func toFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+// inferValueType returns the Go type name of the first non-nil value, or
+// "any" if every value is nil.
+func inferValueType(values []any) string {
+	for _, v := range values {
+		if v != nil {
+			return fmt.Sprintf("%T", v)
+		}
+	}
+	return "any"
+}
+
+// isNumericValues reports whether every non-nil value is numeric, and there
+// is at least one such value.
+func isNumericValues(values []any) bool {
+	seenNumeric := false
+	for _, v := range values {
+		if v == nil {
+			continue
+		}
+		if _, ok := toFloat64(v); !ok {
+			return false
+		}
+		seenNumeric = true
+	}
+	return seenNumeric
 }
 
 // genericSeries is a fallback implementation of SeriesInterface
@@ -465,6 +533,92 @@ func (g *genericSeries) CopyAny() SeriesInterface {
 	}
 }
 
+// genericNumericSeries extends genericSeries with NumericSeriesInterface
+// support by converting its boxed values to float64 on demand.
+type genericNumericSeries struct {
+	genericSeries
+}
+
+func (g *genericNumericSeries) floatValues() []float64 {
+	result := make([]float64, 0, len(g.values))
+	for _, v := range g.values {
+		if f, ok := toFloat64(v); ok {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+func (g *genericNumericSeries) SumFloat() float64 {
+	var sum float64
+	for _, f := range g.floatValues() {
+		sum += f
+	}
+	return sum
+}
+
+func (g *genericNumericSeries) Mean() float64 {
+	fv := g.floatValues()
+	if len(fv) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, f := range fv {
+		sum += f
+	}
+	return sum / float64(len(fv))
+}
+
+func (g *genericNumericSeries) MinFloat() float64 {
+	fv := g.floatValues()
+	if len(fv) == 0 {
+		return 0
+	}
+	min := fv[0]
+	for _, f := range fv[1:] {
+		if f < min {
+			min = f
+		}
+	}
+	return min
+}
+
+func (g *genericNumericSeries) MaxFloat() float64 {
+	fv := g.floatValues()
+	if len(fv) == 0 {
+		return 0
+	}
+	max := fv[0]
+	for _, f := range fv[1:] {
+		if f > max {
+			max = f
+		}
+	}
+	return max
+}
+
+func (g *genericNumericSeries) Count() int { return g.Len() }
+
+func (g *genericNumericSeries) StdDev(dof int) float64 {
+	fv := g.floatValues()
+	n := len(fv)
+	if n == 0 || n-dof <= 0 {
+		return 0
+	}
+	mean := g.Mean()
+	var sumSquaredDiff float64
+	for _, f := range fv {
+		diff := f - mean
+		sumSquaredDiff += diff * diff
+	}
+	return math.Sqrt(sumSquaredDiff / float64(n-dof))
+}
+
+func (g *genericNumericSeries) CopyAny() SeriesInterface {
+	copied := g.genericSeries.CopyAny().(*genericSeries)
+	return &genericNumericSeries{genericSeries: *copied}
+}
+
 // Range provides an iterator over rows of the DataFrame
 // Returns a function that yields index and row map for each row
 func (df *DataFrame) Range() func(yield func(idx any, row map[string]any) bool) {
@@ -494,10 +648,6 @@ func (df *DataFrame) FilterColumn(columnName string, predicate func(any) bool) (
 		if predicate(series.AtAny(i)) {
 			matchingIndices = append(matchingIndices, i)
 		}
-	}
-
-	if len(matchingIndices) == 0 {
-		return nil, fmt.Errorf("no rows match the predicate")
 	}
 
 	// Build new index
@@ -601,20 +751,11 @@ func (df *DataFrame) ApplyToColumn(columnName string, fn func(any) any) (*DataFr
 		newValues[i] = fn(series.AtAny(i))
 	}
 
-	// Infer type from first non-nil result
-	valueType := "any"
-	for _, v := range newValues {
-		if v != nil {
-			valueType = fmt.Sprintf("%T", v)
-			break
-		}
-	}
-
 	// Create new series with transformed values
 	newIndex := make([]any, len(df.index))
 	copy(newIndex, df.index)
 
-	newSeries := createSeriesFromAny(columnName, newValues, newIndex, valueType, df.indexType)
+	newSeries := createSeriesFromAny(columnName, newValues, newIndex, inferValueType(newValues), df.indexType)
 
 	// Create new DataFrame with replaced column
 	newColumns := make(map[string]SeriesInterface)
@@ -659,20 +800,11 @@ func (df *DataFrame) ApplyToColumns(columns []string, fn func(map[string]any) an
 		newValues[i] = fn(row)
 	}
 
-	// Infer type from first non-nil result
-	valueType := "any"
-	for _, v := range newValues {
-		if v != nil {
-			valueType = fmt.Sprintf("%T", v)
-			break
-		}
-	}
-
 	// Create new series
 	newIndex := make([]any, len(df.index))
 	copy(newIndex, df.index)
 
-	newSeries := createSeriesFromAny(resultColumnName, newValues, newIndex, valueType, df.indexType)
+	newSeries := createSeriesFromAny(resultColumnName, newValues, newIndex, inferValueType(newValues), df.indexType)
 
 	// Create new DataFrame with added column
 	newColumns := make(map[string]SeriesInterface)

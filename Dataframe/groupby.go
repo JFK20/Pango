@@ -22,14 +22,12 @@ func (df *DataFrame) GroupBy(columnName string) (*DataFrameGroupBy, error) {
 	// Build groups map
 	groups := make(map[any][]int)
 	var groupKeys []any
-	seenKeys := make(map[any]bool)
 
 	for i := 0; i < df.nrows; i++ {
 		key := series.AtAny(i)
 
-		if !seenKeys[key] {
+		if _, ok := groups[key]; !ok {
 			groupKeys = append(groupKeys, key)
-			seenKeys[key] = true
 		}
 
 		groups[key] = append(groups[key], i)
@@ -109,143 +107,6 @@ func AggStdDev(s SeriesInterface) any {
 	return nil
 }
 
-// Aggregate applies aggregation functions to columns and returns a new DataFrame
-// aggregations is a map from result column name to AggFunc
-// Format: map["column_aggname"] = AggFunc
-func (gb *DataFrameGroupBy) Aggregate(aggregations map[string]AggFunc) (*DataFrame, error) {
-	if len(aggregations) == 0 {
-		return nil, fmt.Errorf("no aggregations specified")
-	}
-
-	// Build result DataFrame
-	nGroups := len(gb.groupKeys)
-
-	// Create index from group keys
-	newIndex := make([]any, nGroups)
-	copy(newIndex, gb.groupKeys)
-
-	// Parse aggregation column names to get source column and agg name
-	type aggSpec struct {
-		sourceColumn string
-		aggFunc      AggFunc
-		resultName   string
-	}
-
-	var aggSpecs []aggSpec
-	for resultName, fn := range aggregations {
-		// Try to extract source column name from result name
-		// Expected format: "column_aggname" or custom name
-		// For simplicity, we'll require explicit source column specification
-		// Store as-is for now
-		aggSpecs = append(aggSpecs, aggSpec{
-			sourceColumn: "", // to be determined
-			aggFunc:      fn,
-			resultName:   resultName,
-		})
-	}
-
-	// Actually, let's redesign the API to be clearer
-	// We'll pass a map of sourceColumn -> map of aggName -> AggFunc
-	// But for now, let's implement a simpler version
-
-	// Build result columns
-	resultColumns := make(map[string]SeriesInterface)
-	columnOrder := []string{gb.groupColumn} // Start with group column
-
-	// Add group column
-	groupColValues := make([]any, nGroups)
-	groupColIndex := make([]any, nGroups)
-	for i, key := range gb.groupKeys {
-		groupColValues[i] = key
-		groupColIndex[i] = i
-	}
-
-	groupSeries, err := gb.df.GetColumn(gb.groupColumn)
-	if err != nil {
-		return nil, err
-	}
-
-	resultColumns[gb.groupColumn] = createSeriesFromAny(
-		gb.groupColumn,
-		groupColValues,
-		groupColIndex,
-		groupSeries.GetValueType(),
-		"int",
-	)
-
-	// Process each aggregation
-	for resultName, aggFunc := range aggregations {
-		// Extract source column name from result name
-		// For now, assume user provides full column names
-		// We need to infer which column to aggregate
-		// Let's require the format "sourceColumn_aggName"
-		// But we can't parse that reliably, so let's change the API
-
-		// For this implementation, we'll aggregate all non-group columns
-		// and name results as "column_resultName"
-		// Actually, let's require user to specify column explicitly
-		// by using a nested map structure later
-
-		// For now, simple implementation: assume resultName indicates source column
-		// This is a limitation we'll document
-		values := make([]any, nGroups)
-
-		// We need to know which column to aggregate
-		// For this simple version, let's assume aggregations map has format:
-		// "sourceColumn_aggName" -> aggFunc
-		// We'll parse the underscore to get source column
-
-		// Find the source column by trying each column until aggFunc returns non-nil
-		var foundColumn string
-		for _, colName := range gb.df.columnOrder {
-			if colName == gb.groupColumn {
-				continue // skip group column
-			}
-
-			// Try aggregating this column for first group
-			firstGroupIndices := gb.groups[gb.groupKeys[0]]
-			subSeries := gb.extractSubSeries(colName, firstGroupIndices)
-			result := aggFunc(subSeries)
-
-			if result != nil {
-				foundColumn = colName
-				break
-			}
-		}
-
-		if foundColumn == "" {
-			return nil, fmt.Errorf("could not determine source column for aggregation %s", resultName)
-		}
-
-		// Apply aggregation for each group
-		for i, key := range gb.groupKeys {
-			rowIndices := gb.groups[key]
-			subSeries := gb.extractSubSeries(foundColumn, rowIndices)
-			values[i] = aggFunc(subSeries)
-		}
-
-		// Create result series
-		resultSeries := createSeriesFromAny(
-			resultName,
-			values,
-			groupColIndex,
-			fmt.Sprintf("%T", values[0]),
-			"int",
-		)
-
-		resultColumns[resultName] = resultSeries
-		columnOrder = append(columnOrder, resultName)
-	}
-
-	return &DataFrame{
-		columns:     resultColumns,
-		columnOrder: columnOrder,
-		index:       groupColIndex,
-		indexType:   "int",
-		nrows:       nGroups,
-	}, nil
-}
-
 // AggregateColumns applies specific aggregations to specific columns
 // aggregations is a map from column name to map of result suffix to AggFunc
 // Example: {"price": {"mean": AggMean, "sum": AggSum}} creates "price_mean" and "price_sum"
@@ -293,21 +154,20 @@ func (gb *DataFrameGroupBy) AggregateColumns(aggregations map[string]map[string]
 			return nil, fmt.Errorf("column %s not found: %w", colName, err)
 		}
 
+		// Build each group's sub-series once, shared across every
+		// aggregation requested for this column (previously rebuilt once
+		// per aggregation, i.e. once per group per agg function).
+		subSeriesByGroup := make([]SeriesInterface, nGroups)
+		for i, key := range gb.groupKeys {
+			subSeriesByGroup[i] = gb.extractSubSeries(colName, gb.groups[key])
+		}
+
 		for aggName, aggFunc := range aggMap {
 			resultName := colName + "_" + aggName
 			values := make([]any, nGroups)
 
-			// Apply aggregation for each group
-			for i, key := range gb.groupKeys {
-				rowIndices := gb.groups[key]
-				subSeries := gb.extractSubSeries(colName, rowIndices)
+			for i, subSeries := range subSeriesByGroup {
 				values[i] = aggFunc(subSeries)
-			}
-
-			// Infer type from first value
-			valueType := "any"
-			if len(values) > 0 && values[0] != nil {
-				valueType = fmt.Sprintf("%T", values[0])
 			}
 
 			// Create result series
@@ -315,7 +175,7 @@ func (gb *DataFrameGroupBy) AggregateColumns(aggregations map[string]map[string]
 				resultName,
 				values,
 				groupColIndex,
-				valueType,
+				inferValueType(values),
 				"int",
 			)
 

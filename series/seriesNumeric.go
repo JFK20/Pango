@@ -3,6 +3,7 @@ package series
 import (
 	"fmt"
 	"math"
+	"pango/Dataframe"
 	"reflect"
 )
 
@@ -327,6 +328,13 @@ func (ns *NumericSeries[T, R]) Correlation(other *NumericSeries[T, R]) float64 {
 }
 
 // NumericSeriesInterface compatibility methods
+
+// CopyAny creates a deep copy of the Series for interface compatibility,
+// overriding the embedded Series.CopyAny so the copy stays a NumericSeries
+// (otherwise numeric aggregations break after any copy-based DataFrame op).
+func (ns *NumericSeries[T, R]) CopyAny() dataframe.SeriesInterface {
+	return NewNumericSeries[T, R](ns.name, ns.Values(), ns.Index())
+}
 
 // SumFloat returns the sum as float64 for interface compatibility
 func (ns *NumericSeries[T, R]) SumFloat() float64 {

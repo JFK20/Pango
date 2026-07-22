@@ -321,11 +321,19 @@ func (s *Series[T, R]) AtIndexAny(i int) (any, any) {
 // GetValueType returns the type of values stored in the Series as a string
 func (s *Series[T, R]) GetValueType() string {
 	var zero T
-	return reflect.TypeOf(zero).String()
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return "any"
+	}
+	return t.String()
 }
 
 // GetIndexType returns the type of index stored in the Series as a string
 func (s *Series[T, R]) GetIndexType() string {
 	var zero R
-	return reflect.TypeOf(zero).String()
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return "any"
+	}
+	return t.String()
 }
