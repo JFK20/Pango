@@ -216,7 +216,7 @@ func (gb *DataFrameGroupBy) extractSubSeries(columnName string, rowIndices []int
 }
 
 // Count returns the size of each group
-func (gb *DataFrameGroupBy) Count() *DataFrame {
+func (gb *DataFrameGroupBy) Count() (*DataFrame, error) {
 	nGroups := len(gb.groupKeys)
 
 	groupColIndex := make([]any, nGroups)
@@ -230,7 +230,10 @@ func (gb *DataFrameGroupBy) Count() *DataFrame {
 		groupColValues[i] = key
 	}
 
-	groupSeries, _ := gb.df.GetColumn(gb.groupColumn)
+	groupSeries, err := gb.df.GetColumn(gb.groupColumn)
+	if err != nil {
+		return nil, err
+	}
 
 	// Count values
 	countValues := make([]any, nGroups)
@@ -260,5 +263,5 @@ func (gb *DataFrameGroupBy) Count() *DataFrame {
 		index:       groupColIndex,
 		indexType:   "int",
 		nrows:       nGroups,
-	}
+	}, nil
 }

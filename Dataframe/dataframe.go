@@ -46,12 +46,14 @@ func NewDataFrame(series ...SeriesInterface) (*DataFrame, error) {
 	index := series[0].IndexAny()
 	indexType := series[0].GetIndexType()
 
-	// Build columns map and order
+	// Build columns map and order. Store independent copies so a caller
+	// that keeps its typed Series pointer and mutates it later (e.g. via
+	// Append/Prepend) can't desync the DataFrame's columns from its nrows.
 	columns := make(map[string]SeriesInterface)
 	columnOrder := make([]string, len(series))
 	for i, s := range series {
 		name := s.Name()
-		columns[name] = s
+		columns[name] = s.CopyAny()
 		columnOrder[i] = name
 	}
 
@@ -95,12 +97,13 @@ func NewDataFrameWithIndex(index []any, series ...SeriesInterface) (*DataFrame, 
 		indexType = reflect.TypeOf(index[0]).String()
 	}
 
-	// Build columns map and order
+	// Build columns map and order. Store independent copies (see
+	// NewDataFrame for why).
 	columns := make(map[string]SeriesInterface)
 	columnOrder := make([]string, len(series))
 	for i, s := range series {
 		name := s.Name()
-		columns[name] = s
+		columns[name] = s.CopyAny()
 		columnOrder[i] = name
 	}
 
@@ -164,7 +167,7 @@ func (df *DataFrame) AddColumn(s SeriesInterface) error {
 		return fmt.Errorf("column %s already exists", name)
 	}
 
-	df.columns[name] = s
+	df.columns[name] = s.CopyAny()
 	df.columnOrder = append(df.columnOrder, name)
 	return nil
 }
