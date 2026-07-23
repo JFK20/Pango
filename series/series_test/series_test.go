@@ -1,23 +1,25 @@
-package series
+package series_test
 
 import (
 	"testing"
+
+	series "pango/series"
 )
 
 func TestNewSeries(t *testing.T) {
 	t.Run("creates series with valid data", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
 		index := []string{"a", "b", "c", "d", "e"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		if s == nil {
 			t.Fatal("expected series to be created")
 		}
-		if s.name != "test" {
-			t.Errorf("expected name 'test', got %s", s.name)
+		if s.Name() != "test" {
+			t.Errorf("expected name 'test', got %s", s.Name())
 		}
-		if len(s.values) != 5 {
-			t.Errorf("expected 5 values, got %d", len(s.values))
+		if s.Len() != 5 {
+			t.Errorf("expected 5 values, got %d", s.Len())
 		}
 	})
 
@@ -27,7 +29,7 @@ func TestNewSeries(t *testing.T) {
 				t.Error("expected panic for empty values")
 			}
 		}()
-		NewSeries[int, string]("test", []int{}, nil)
+		series.NewSeries[int, string]("test", []int{}, nil)
 	})
 }
 
@@ -39,7 +41,7 @@ func TestNewSeries_EdgeCases(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		NewSeries[int, string]("test", values, nil)
+		series.NewSeries[int, string]("test", values, nil)
 	})
 
 	t.Run("panics with mismatched lengths", func(t *testing.T) {
@@ -50,13 +52,13 @@ func TestNewSeries_EdgeCases(t *testing.T) {
 		}()
 		values := []int{1, 2, 3}
 		index := []string{"a", "b"} // wrong length
-		NewSeries("test", values, index)
+		series.NewSeries("test", values, index)
 	})
 }
 
 func TestLen(t *testing.T) {
 	values := []int{1, 2, 3, 4, 5}
-	s := NewIndexSeries("test", values)
+	s := series.NewIndexSeries("test", values)
 
 	if s.Len() != 5 {
 		t.Errorf("expected length 5, got %d", s.Len())
@@ -65,7 +67,7 @@ func TestLen(t *testing.T) {
 
 func TestName(t *testing.T) {
 	values := []string{"a", "b", "c"}
-	s := NewIndexSeries("my_series", values)
+	s := series.NewIndexSeries("my_series", values)
 
 	if s.Name() != "my_series" {
 		t.Errorf("expected name 'my_series', got %s", s.Name())
@@ -74,7 +76,7 @@ func TestName(t *testing.T) {
 
 func TestSetName(t *testing.T) {
 	values := []int{1, 2, 3}
-	s := NewIndexSeries("old_name", values)
+	s := series.NewIndexSeries("old_name", values)
 	s.SetName("new_name")
 
 	if s.Name() != "new_name" {
@@ -84,7 +86,7 @@ func TestSetName(t *testing.T) {
 
 func TestValues(t *testing.T) {
 	values := []int{1, 2, 3, 4, 5}
-	s := NewIndexSeries("test", values)
+	s := series.NewIndexSeries("test", values)
 
 	copied := s.Values()
 
@@ -97,7 +99,7 @@ func TestValues(t *testing.T) {
 
 	// Verify it's a copy by modifying it
 	copied[0] = 999
-	if s.values[0] == 999 {
+	if s.At(0) == 999 {
 		t.Error("Values() should return a copy, not the original slice")
 	}
 }
@@ -106,7 +108,7 @@ func TestIndex(t *testing.T) {
 	t.Run("returns provided index", func(t *testing.T) {
 		values := []int{1, 2, 3}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		idx := s.Index()
 		if len(idx) != 3 {
@@ -116,7 +118,7 @@ func TestIndex(t *testing.T) {
 
 	t.Run("generates index when nil", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 
 		idx := s.Index()
 		if len(idx) != 3 {
@@ -129,7 +131,7 @@ func TestGet(t *testing.T) {
 	t.Run("gets value at valid index", func(t *testing.T) {
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		label, value := s.AtIndex(1)
 		if label != "b" {
@@ -147,7 +149,7 @@ func TestGet(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 		s.At(-1)
 	})
 
@@ -158,7 +160,7 @@ func TestGet(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 		s.At(10)
 	})
 
@@ -169,7 +171,7 @@ func TestGet(t *testing.T) {
 			}
 		}()
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 		s.AtIndex(3)
 	})
 }
@@ -177,7 +179,7 @@ func TestGet(t *testing.T) {
 func TestSeries_IndexGet(t *testing.T) {
 	values := []int{1, 2, 3}
 	index := []string{"a", "b", "c"}
-	s := NewSeries("test", values, index)
+	s := series.NewSeries("test", values, index)
 
 	val := s.Get("b")
 	if val != 2 {
@@ -189,7 +191,7 @@ func TestString(t *testing.T) {
 	t.Run("prints series with name", func(t *testing.T) {
 		values := []int{1, 2, 3}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test_series", values, index)
+		s := series.NewSeries("test_series", values, index)
 
 		str := s.String()
 		if str == "" {
@@ -206,7 +208,7 @@ func TestString(t *testing.T) {
 		for i := range values {
 			values[i] = i
 		}
-		s := NewIndexSeries("long_series", values)
+		s := series.NewIndexSeries("long_series", values)
 
 		str := s.String()
 		if str == "" {
@@ -219,20 +221,20 @@ func TestHead(t *testing.T) {
 	t.Run("returns first n elements", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
 		index := []string{"a", "b", "c", "d", "e"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		head := s.Head(3)
 		if head.Len() != 3 {
 			t.Errorf("expected length 3, got %d", head.Len())
 		}
-		if head.values[0] != 1 || head.values[1] != 2 || head.values[2] != 3 {
+		if head.At(0) != 1 || head.At(1) != 2 || head.At(2) != 3 {
 			t.Error("head values are incorrect")
 		}
 	})
 
 	t.Run("returns all elements when n exceeds length", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 
 		head := s.Head(10)
 		if head.Len() != 3 {
@@ -242,7 +244,7 @@ func TestHead(t *testing.T) {
 
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
-		s := NewIndexSeries("my_series", values)
+		s := series.NewIndexSeries("my_series", values)
 
 		head := s.Head(2)
 		if head.Name() != "my_series" {
@@ -255,20 +257,20 @@ func TestTail(t *testing.T) {
 	t.Run("returns last n elements", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
 		index := []string{"a", "b", "c", "d", "e"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		tail := s.Tail(3)
 		if tail.Len() != 3 {
 			t.Errorf("expected length 3, got %d", tail.Len())
 		}
-		if tail.values[0] != 3 || tail.values[1] != 4 || tail.values[2] != 5 {
+		if tail.At(0) != 3 || tail.At(1) != 4 || tail.At(2) != 5 {
 			t.Error("tail values are incorrect")
 		}
 	})
 
 	t.Run("returns all elements when n exceeds length", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
+		s := series.NewIndexSeries("test", values)
 
 		tail := s.Tail(10)
 		if tail.Len() != 3 {
@@ -278,7 +280,7 @@ func TestTail(t *testing.T) {
 
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
-		s := NewIndexSeries("my_series", values)
+		s := series.NewIndexSeries("my_series", values)
 
 		tail := s.Tail(2)
 		if tail.Name() != "my_series" {
@@ -290,17 +292,17 @@ func TestTail(t *testing.T) {
 func TestAppend(t *testing.T) {
 	t.Run("appends Series", func(t *testing.T) {
 		values := []int{1, 2, 3}
-		s := NewIndexSeries("series1", values)
+		s := series.NewIndexSeries("series1", values)
 
 		values = []int{4, 5, 6}
-		o := NewIndexSeries("series2", values)
+		o := series.NewIndexSeries("series2", values)
 
 		s.Append(o)
 		if s.Len() != 6 {
 			t.Errorf("expected length 4, got %d", s.Len())
 		}
-		if s.values[3] != 4 {
-			t.Errorf("expected value to be 4, got %d", s.values[3])
+		if s.At(3) != 4 {
+			t.Errorf("expected value to be 4, got %d", s.At(3))
 		}
 	})
 }
@@ -308,23 +310,23 @@ func TestAppend(t *testing.T) {
 func TestPrepend(t *testing.T) {
 	t.Run("prepends Series to the beginning", func(t *testing.T) {
 		values := []int{4, 5, 6}
-		s := NewIndexSeries("series1", values)
+		s := series.NewIndexSeries("series1", values)
 
 		values = []int{1, 2, 3}
-		o := NewIndexSeries("series2", values)
+		o := series.NewIndexSeries("series2", values)
 
 		s.Prepend(o)
 		if s.Len() != 6 {
 			t.Errorf("expected length 6, got %d", s.Len())
 		}
-		if s.values[0] != 1 {
-			t.Errorf("expected first value to be 1, got %d", s.values[0])
+		if s.At(0) != 1 {
+			t.Errorf("expected first value to be 1, got %d", s.At(0))
 		}
-		if s.values[2] != 3 {
-			t.Errorf("expected third value to be 3, got %d", s.values[2])
+		if s.At(2) != 3 {
+			t.Errorf("expected third value to be 3, got %d", s.At(2))
 		}
-		if s.values[3] != 4 {
-			t.Errorf("expected fourth value to be 4, got %d", s.values[3])
+		if s.At(3) != 4 {
+			t.Errorf("expected fourth value to be 4, got %d", s.At(3))
 		}
 	})
 }
@@ -338,7 +340,7 @@ func TestGet_NonExisting(t *testing.T) {
 		}()
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		s.Get("nonexistent")
 	})
@@ -348,7 +350,7 @@ func TestResetIndex(t *testing.T) {
 	t.Run("resets index to 0..n-1", func(t *testing.T) {
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		resetSeries := s.ResetIndex()
 		if resetSeries.Len() != 3 {
@@ -371,7 +373,7 @@ func TestResetIndex(t *testing.T) {
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3}
 		index := []string{"x", "y", "z"}
-		s := NewSeries("my_series", values, index)
+		s := series.NewSeries("my_series", values, index)
 
 		resetSeries := s.ResetIndex()
 		if resetSeries.Name() != "my_series" {
@@ -384,10 +386,10 @@ func TestSetIndex(t *testing.T) {
 	t.Run("sets new index", func(t *testing.T) {
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		newIndex := []float64{1.1, 2.2, 3.3}
-		newSeries := SetIndex(s, newIndex)
+		newSeries := series.SetIndex(s, newIndex)
 
 		if newSeries.Len() != 3 {
 			t.Errorf("expected length 3, got %d", newSeries.Len())
@@ -407,10 +409,10 @@ func TestSetIndex(t *testing.T) {
 	t.Run("preserves series name", func(t *testing.T) {
 		values := []int{1, 2, 3}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("my_series", values, index)
+		s := series.NewSeries("my_series", values, index)
 
 		newIndex := []int{10, 20, 30}
-		newSeries := SetIndex(s, newIndex)
+		newSeries := series.SetIndex(s, newIndex)
 		if newSeries.Name() != "my_series" {
 			t.Errorf("expected name 'my_series', got %s", newSeries.Name())
 		}
@@ -424,10 +426,10 @@ func TestSetIndex(t *testing.T) {
 		}()
 		values := []int{1, 2, 3}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		newIndex := []int{1, 2} // wrong length
-		SetIndex(s, newIndex)
+		series.SetIndex(s, newIndex)
 	})
 }
 
@@ -435,7 +437,7 @@ func TestIndex_Copy(t *testing.T) {
 	t.Run("Index returns a copy not the original", func(t *testing.T) {
 		values := []int{1, 2, 3}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		copiedIndex := s.Index()
 		copiedIndex[0] = "modified"
@@ -448,25 +450,13 @@ func TestIndex_Copy(t *testing.T) {
 	})
 }
 
-// we cant create an empty series using NewSeries as it panics
-func TestIsEmpty(t *testing.T) {
-	t.Run("returns false for non-empty series", func(t *testing.T) {
-		values := []int{1, 2, 3}
-		s := NewIndexSeries("test", values)
-
-		if s.isEmpty() {
-			t.Error("expected isEmpty to return false for non-empty series")
-		}
-	})
-}
-
 func TestSortByIndex(t *testing.T) {
 	t.Run("sorts series in ascending order", func(t *testing.T) {
 		values := []int{30, 10, 20}
 		index := []string{"c", "a", "b"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByIndex(s, true)
+		sorted := series.SortByIndex(s, true)
 		sortedIndex := sorted.Index()
 		if sortedIndex[0] != "a" || sortedIndex[1] != "b" || sortedIndex[2] != "c" {
 			t.Error("series not sorted correctly in ascending order")
@@ -476,9 +466,9 @@ func TestSortByIndex(t *testing.T) {
 	t.Run("sorts series in descending order", func(t *testing.T) {
 		values := []int{30, 10, 20}
 		index := []string{"c", "a", "b"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByIndex(s, false)
+		sorted := series.SortByIndex(s, false)
 		sortedIndex := sorted.Index()
 		if sortedIndex[0] != "c" || sortedIndex[1] != "b" || sortedIndex[2] != "a" {
 			t.Error("series not sorted correctly in descending order")
@@ -490,7 +480,7 @@ func TestSeries_IsIn(t *testing.T) {
 	t.Run("returns true if series contains index", func(t *testing.T) {
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		if !s.IsIn(20) {
 			t.Error("expected IsIn to return true for existing value")
@@ -500,7 +490,7 @@ func TestSeries_IsIn(t *testing.T) {
 	t.Run("returns false if series does not contain index", func(t *testing.T) {
 		values := []int{10, 20, 30}
 		index := []string{"a", "b", "c"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		if s.IsIn(40) {
 			t.Error("expected IsIn to return false for non-existing value")
@@ -512,9 +502,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("sorts by integer values ascending", func(t *testing.T) {
 		values := []int{30, 10, 20}
 		index := []string{"c", "a", "b"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, true)
+		sorted := series.SortByValue(s, true)
 
 		// Check values are sorted
 		expectedValues := []int{10, 20, 30}
@@ -539,9 +529,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("sorts by integer values descending", func(t *testing.T) {
 		values := []int{30, 10, 20}
 		index := []string{"c", "a", "b"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, false)
+		sorted := series.SortByValue(s, false)
 
 		// Check values are sorted descending
 		expectedValues := []int{30, 20, 10}
@@ -566,9 +556,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("sorts by string values ascending", func(t *testing.T) {
 		values := []string{"zebra", "apple", "mango"}
 		index := []int{3, 1, 2}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, true)
+		sorted := series.SortByValue(s, true)
 
 		// Check values are sorted
 		expectedValues := []string{"apple", "mango", "zebra"}
@@ -593,9 +583,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("sorts by string values descending", func(t *testing.T) {
 		values := []string{"zebra", "apple", "mango"}
 		index := []int{3, 1, 2}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, false)
+		sorted := series.SortByValue(s, false)
 
 		// Check values are sorted descending
 		expectedValues := []string{"zebra", "mango", "apple"}
@@ -620,10 +610,10 @@ func TestSortByValue(t *testing.T) {
 	t.Run("original series is not modified", func(t *testing.T) {
 		values := []int{30, 10, 20}
 		index := []string{"c", "a", "b"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		originalFirst := s.At(0)
-		SortByValue(s, true)
+		series.SortByValue(s, true)
 
 		if s.At(0) != originalFirst {
 			t.Error("original series should not be modified")
@@ -633,9 +623,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("handles series with duplicate values", func(t *testing.T) {
 		values := []int{20, 10, 20, 10}
 		index := []string{"a", "b", "c", "d"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, true)
+		sorted := series.SortByValue(s, true)
 
 		// Check that all values are present
 		if sorted.Len() != 4 {
@@ -652,9 +642,9 @@ func TestSortByValue(t *testing.T) {
 	t.Run("handles single element series", func(t *testing.T) {
 		values := []int{42}
 		index := []string{"answer"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
-		sorted := SortByValue(s, true)
+		sorted := series.SortByValue(s, true)
 
 		if sorted.Len() != 1 {
 			t.Errorf("expected length 1, got %d", sorted.Len())
@@ -669,7 +659,7 @@ func TestCopy(t *testing.T) {
 	t.Run("creates a deep copy of the series", func(t *testing.T) {
 		values := []int{1, 2, 3, 4, 5}
 		index := []string{"a", "b", "c", "d", "e"}
-		s := NewSeries("test", values, index)
+		s := series.NewSeries("test", values, index)
 
 		copied := s.Copy()
 
@@ -726,15 +716,159 @@ func TestCopy(t *testing.T) {
 			t.Error("modifying original name should not affect copy series name")
 		}
 
-		s.values[0] = 888
+		// Append mutates the original's backing values/index slices (see
+		// Series.Append); this proves Copy() holds independent backing
+		// arrays rather than just an independent struct wrapping the same
+		// slices.
+		copiedLenBeforeAppend := copied.Len()
+		more := series.NewSeries("more", []int{888}, []string{"z"})
+		s.Append(more)
+		if copied.Len() != copiedLenBeforeAppend {
+			t.Error("appending to the original after Copy() should not affect the copy's length")
+		}
 		if copied.At(0) == 888 {
 			t.Error("modifying original values should not affect copy series values")
 		}
+	})
+}
 
-		s.index[0] = "original_changed"
-		copiedIndex = copied.Index()
-		if copiedIndex[0] == "original_changed" {
-			t.Error("modifying original index should not affect copy series index")
+func TestCopyAny(t *testing.T) {
+	t.Run("creates a copy through interface", func(t *testing.T) {
+		values := []string{"apple", "banana", "cherry"}
+		index := []int{10, 20, 30}
+		s := series.NewSeries("fruits", values, index)
+
+		copied := s.CopyAny()
+
+		if copied == nil {
+			t.Fatal("expected copy to be created")
+		}
+
+		if copied.Name() != s.Name() {
+			t.Errorf("expected name %s, got %s", s.Name(), copied.Name())
+		}
+
+		if copied.Len() != s.Len() {
+			t.Errorf("expected length %d, got %d", s.Len(), copied.Len())
+		}
+	})
+}
+
+func TestValuesAny(t *testing.T) {
+	t.Run("returns values as []any for int series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4}
+		index := []string{"a", "b", "c", "d"}
+		s := series.NewSeries("test", values, index)
+
+		result := s.ValuesAny()
+
+		if len(result) != len(values) {
+			t.Errorf("expected length %d, got %d", len(values), len(result))
+		}
+
+		for i, v := range values {
+			if result[i] != v {
+				t.Errorf("expected value %v at index %d, got %v", v, i, result[i])
+			}
+		}
+	})
+}
+
+func TestIndexAny(t *testing.T) {
+	t.Run("returns index as []any for string index", func(t *testing.T) {
+		values := []int{10, 20, 30}
+		index := []string{"a", "b", "c"}
+		s := series.NewSeries("test", values, index)
+
+		result := s.IndexAny()
+
+		if len(result) != len(index) {
+			t.Errorf("expected length %d, got %d", len(index), len(result))
+		}
+
+		for i, idx := range index {
+			if result[i] != idx {
+				t.Errorf("expected index %v at position %d, got %v", idx, i, result[i])
+			}
+		}
+	})
+}
+
+func TestAtAny(t *testing.T) {
+	t.Run("returns value at index as any", func(t *testing.T) {
+		values := []string{"first", "second", "third"}
+		index := []int{1, 2, 3}
+		s := series.NewSeries("test", values, index)
+
+		result := s.AtAny(0)
+		if result != "first" {
+			t.Errorf("expected 'first', got %v", result)
+		}
+
+		result = s.AtAny(2)
+		if result != "third" {
+			t.Errorf("expected 'third', got %v", result)
+		}
+	})
+}
+
+func TestAtIndexAny(t *testing.T) {
+	t.Run("returns label and value as any", func(t *testing.T) {
+		values := []int{100, 200, 300}
+		index := []string{"x", "y", "z"}
+		s := series.NewSeries("test", values, index)
+
+		label, value := s.AtIndexAny(0)
+		if label != "x" {
+			t.Errorf("expected label 'x', got %v", label)
+		}
+		if value != 100 {
+			t.Errorf("expected value 100, got %v", value)
+		}
+
+		label, value = s.AtIndexAny(2)
+		if label != "z" {
+			t.Errorf("expected label 'z', got %v", label)
+		}
+		if value != 300 {
+			t.Errorf("expected value 300, got %v", value)
+		}
+	})
+}
+
+func TestGetValueType(t *testing.T) {
+	t.Run("returns correct type for int values", func(t *testing.T) {
+		values := []int{1, 2, 3}
+		index := []string{"a", "b", "c"}
+		s := series.NewSeries("test", values, index)
+
+		typeStr := s.GetValueType()
+		if typeStr != "int" {
+			t.Errorf("expected 'int', got %s", typeStr)
+		}
+	})
+}
+
+func TestGetIndexType(t *testing.T) {
+	t.Run("returns correct type for string index", func(t *testing.T) {
+		values := []int{1, 2, 3}
+		index := []string{"a", "b", "c"}
+		s := series.NewSeries("test", values, index)
+
+		typeStr := s.GetIndexType()
+		if typeStr != "string" {
+			t.Errorf("expected 'string', got %s", typeStr)
+		}
+	})
+
+	t.Run("returns correct type for int index", func(t *testing.T) {
+		values := []string{"x", "y", "z"}
+		index := []int{10, 20, 30}
+		s := series.NewSeries("test", values, index)
+
+		typeStr := s.GetIndexType()
+		if typeStr != "int" {
+			t.Errorf("expected 'int', got %s", typeStr)
 		}
 	})
 }

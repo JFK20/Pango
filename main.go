@@ -3,25 +3,31 @@ package main
 
 import (
 	"fmt"
-	"pango/series"
+
+	"pango/example/dataframes"
+	"pango/example/series"
 )
 
 func main() {
-	// Create a series: ages with custom index
-	ages := series.NewSeries(
-		"Age",                               // name
-		[]int{25, 30, 35},                   // values
-		[]string{"Alice", "Bob", "Charlie"}, // index
+	fmt.Println("=== Series examples ===")
 
-	)
+	fmt.Println("\n--- Example 1: Column sum ---")
+	series.Example1SumColumn()
 
-	fmt.Println(ages)
-	// Output:
-	// Age
-	// Alice: 25
-	// Bob: 30
-	// Charlie: 35
+	fmt.Println("\n--- Example 2: add two columns and save it in a third ---")
+	series.Example2AddColumns()
 
-	fmt.Println(ages.Head(2))
-	fmt.Println(ages.Tail(2))
+	fmt.Println("\n--- Example 3: multiple arithmetic operations ---")
+	series.Example3MultipleOperations()
+
+	fmt.Println("\n=== DataFrame examples ===")
+
+	fmt.Println("\n--- Example 1: Select, filter, Head/Tail ---")
+	dataframes.Example1SelectFilterHeadTail()
+
+	fmt.Println("\n--- Example 2: Transform columns ---")
+	dataframes.Example2TransformColumns()
+
+	fmt.Println("\n--- Example 3: GroupBy and aggregate ---")
+	dataframes.Example3GroupByAggregate()
 }

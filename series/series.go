@@ -3,6 +3,8 @@ package series
 import (
 	"cmp"
 	"fmt"
+	"pango/Dataframe"
+	"reflect"
 	"slices"
 	"strings"
 )
@@ -280,4 +282,58 @@ func (s *Series[T, R]) Copy() *Series[T, R] {
 	copy(copiedIndex, s.index)
 
 	return NewSeries(s.name, copiedValues, copiedIndex)
+}
+
+// CopyAny creates a deep copy of the Series for interface compatibility
+func (s *Series[T, R]) CopyAny() dataframe.SeriesInterface {
+	return s.Copy()
+}
+
+// ValuesAny returns the values of the series as []any for interface compatibility
+func (s *Series[T, R]) ValuesAny() []any {
+	result := make([]any, len(s.values))
+	for i, v := range s.values {
+		result[i] = v
+	}
+	return result
+}
+
+// IndexAny returns the index of the series as []any for interface compatibility
+func (s *Series[T, R]) IndexAny() []any {
+	result := make([]any, len(s.index))
+	for i, idx := range s.index {
+		result[i] = idx
+	}
+	return result
+}
+
+// AtAny returns the value at the given index as any for interface compatibility
+func (s *Series[T, R]) AtAny(i int) any {
+	return s.At(i)
+}
+
+// AtIndexAny returns the label and value at the given index as any for interface compatibility
+func (s *Series[T, R]) AtIndexAny(i int) (any, any) {
+	label, value := s.AtIndex(i)
+	return label, value
+}
+
+// GetValueType returns the type of values stored in the Series as a string
+func (s *Series[T, R]) GetValueType() string {
+	var zero T
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return "any"
+	}
+	return t.String()
+}
+
+// GetIndexType returns the type of index stored in the Series as a string
+func (s *Series[T, R]) GetIndexType() string {
+	var zero R
+	t := reflect.TypeOf(zero)
+	if t == nil {
+		return "any"
+	}
+	return t.String()
 }

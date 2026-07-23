@@ -3,7 +3,9 @@ package series
 import (
 	"fmt"
 	"math"
+	"pango/Dataframe"
 	"reflect"
+	"slices"
 )
 
 type Numeric interface {
@@ -33,7 +35,7 @@ func NewIndexNumericSeries[T Numeric](name string, values []T) *NumericSeries[T,
 
 // Sum returns the sum of the Series
 func (ns *NumericSeries[T, R]) Sum() T {
-	var sum T
+	sum := T(0)
 	for _, v := range ns.values {
 		sum += v
 	}
@@ -324,4 +326,65 @@ func (ns *NumericSeries[T, R]) Correlation(other *NumericSeries[T, R]) float64 {
 	}
 
 	return 0.0
+}
+
+// Quantile returns the value at the given quantile q (0-1) using linear interpolation,
+// matching numpy/pandas' default "linear" method.
+func (ns *NumericSeries[T, R]) Quantile(q float64) float64 {
+	if ns.Len() == 0 {
+		panic("cannot get quantile of empty series")
+	}
+	if q < 0 || q > 1 {
+		panic("quantile must be between 0 and 1")
+	}
+
+	values := make([]float64, ns.Len())
+	for i, v := range ns.values {
+		values[i] = float64(v)
+	}
+	slices.Sort(values)
+
+	pos := q * float64(len(values)-1)
+	lower := int(math.Floor(pos))
+	upper := int(math.Ceil(pos))
+	if lower == upper {
+		return values[lower]
+	}
+
+	frac := pos - float64(lower)
+	return values[lower]*(1-frac) + values[upper]*frac
+}
+
+// Median returns the median value (Quantile(0.5))
+func (ns *NumericSeries[T, R]) Median() float64 {
+	return ns.Quantile(0.5)
+}
+
+// NumericSeriesInterface compatibility methods
+
+// CopyAny creates a deep copy of the Series for interface compatibility,
+// overriding the embedded Series.CopyAny so the copy stays a NumericSeries
+// (otherwise numeric aggregations break after any copy-based DataFrame op).
+func (ns *NumericSeries[T, R]) CopyAny() dataframe.SeriesInterface {
+	return NewNumericSeries[T, R](ns.name, ns.Values(), ns.Index())
+}
+
+// SumFloat returns the sum as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) SumFloat() float64 {
+	return float64(ns.Sum())
+}
+
+// MinFloat returns the minimum value as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) MinFloat() float64 {
+	return float64(ns.Min())
+}
+
+// MaxFloat returns the maximum value as float64 for interface compatibility
+func (ns *NumericSeries[T, R]) MaxFloat() float64 {
+	return float64(ns.Max())
+}
+
+// Count returns the number of elements (same as Len)
+func (ns *NumericSeries[T, R]) Count() int {
+	return ns.Len()
 }
