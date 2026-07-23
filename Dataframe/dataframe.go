@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -617,6 +619,28 @@ func (g *genericNumericSeries) StdDev(dof int) float64 {
 	return math.Sqrt(sumSquaredDiff / float64(n-dof))
 }
 
+func (g *genericNumericSeries) Quantile(q float64) float64 {
+	fv := g.floatValues()
+	if len(fv) == 0 || q < 0 || q > 1 {
+		return 0
+	}
+	sort.Float64s(fv)
+
+	pos := q * float64(len(fv)-1)
+	lower := int(math.Floor(pos))
+	upper := int(math.Ceil(pos))
+	if lower == upper {
+		return fv[lower]
+	}
+
+	frac := pos - float64(lower)
+	return fv[lower]*(1-frac) + fv[upper]*frac
+}
+
+func (g *genericNumericSeries) Median() float64 {
+	return g.Quantile(0.5)
+}
+
 func (g *genericNumericSeries) CopyAny() SeriesInterface {
 	copied := g.genericSeries.CopyAny().(*genericSeries)
 	return &genericNumericSeries{genericSeries: *copied}
@@ -653,24 +677,38 @@ func (df *DataFrame) FilterColumn(columnName string, predicate func(any) bool) (
 		}
 	}
 
-	// Build new index
-	newIndex := make([]any, len(matchingIndices))
-	for i, idx := range matchingIndices {
+	return df.selectRows(matchingIndices), nil
+}
+
+// FilterIn returns a new DataFrame with rows where the specified column's value is one of values
+func (df *DataFrame) FilterIn(columnName string, values []any) (*DataFrame, error) {
+	set := make(map[any]struct{}, len(values))
+	for _, v := range values {
+		set[v] = struct{}{}
+	}
+	return df.FilterColumn(columnName, func(v any) bool {
+		_, ok := set[v]
+		return ok
+	})
+}
+
+// selectRows builds a new DataFrame containing only the given row positions, in order
+func (df *DataFrame) selectRows(indices []int) *DataFrame {
+	newIndex := make([]any, len(indices))
+	for i, idx := range indices {
 		newIndex[i] = df.index[idx]
 	}
 
-	// Build new columns with filtered data
 	newColumns := make(map[string]SeriesInterface)
 	for _, colName := range df.columnOrder {
 		col := df.columns[colName]
-		values := make([]any, len(matchingIndices))
-		for i, idx := range matchingIndices {
+		values := make([]any, len(indices))
+		for i, idx := range indices {
 			values[i] = col.AtAny(idx)
 		}
 		newColumns[colName] = createSeriesFromAny(colName, values, newIndex, col.GetValueType(), col.GetIndexType())
 	}
 
-	// Copy column order
 	newOrder := make([]string, len(df.columnOrder))
 	copy(newOrder, df.columnOrder)
 
@@ -679,8 +717,8 @@ func (df *DataFrame) FilterColumn(columnName string, predicate func(any) bool) (
 		columnOrder: newOrder,
 		index:       newIndex,
 		indexType:   df.indexType,
-		nrows:       len(matchingIndices),
-	}, nil
+		nrows:       len(indices),
+	}
 }
 
 // ResetIndex returns a new DataFrame with index reset to 0..n-1
@@ -781,6 +819,66 @@ func (df *DataFrame) ApplyToColumn(columnName string, fn func(any) any) (*DataFr
 		indexType:   df.indexType,
 		nrows:       df.nrows,
 	}, nil
+}
+
+// AstypeColumn returns a new DataFrame with the specified column cast to targetType.
+// Supported target types: "string", "int", "int64", "float64", "bool".
+func (df *DataFrame) AstypeColumn(columnName string, targetType string) (*DataFrame, error) {
+	switch targetType {
+	case "string", "int", "int64", "float64", "bool":
+	default:
+		return nil, fmt.Errorf("unsupported astype target type %q", targetType)
+	}
+	return df.ApplyToColumn(columnName, func(v any) any {
+		return astypeConvert(v, targetType)
+	})
+}
+
+// astypeConvert converts a single value to targetType, panicking if the value cannot be converted
+func astypeConvert(v any, targetType string) any {
+	switch targetType {
+	case "string":
+		return fmt.Sprintf("%v", v)
+	case "int":
+		return int(astypeToFloat64(v))
+	case "int64":
+		return int64(astypeToFloat64(v))
+	case "float64":
+		return astypeToFloat64(v)
+	case "bool":
+		return astypeToBool(v)
+	default:
+		panic(fmt.Sprintf("unsupported astype target type %q", targetType))
+	}
+}
+
+// astypeToFloat64 converts a numeric or numeric-looking string value to float64
+func astypeToFloat64(v any) float64 {
+	if f, ok := toFloat64(v); ok {
+		return f
+	}
+	if s, ok := v.(string); ok {
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+	}
+	panic(fmt.Sprintf("cannot convert %v (%T) to numeric", v, v))
+}
+
+// astypeToBool converts a bool, numeric, or bool-looking string value to bool
+func astypeToBool(v any) bool {
+	switch b := v.(type) {
+	case bool:
+		return b
+	case string:
+		if parsed, err := strconv.ParseBool(b); err == nil {
+			return parsed
+		}
+	}
+	if f, ok := toFloat64(v); ok {
+		return f != 0
+	}
+	panic(fmt.Sprintf("cannot convert %v (%T) to bool", v, v))
 }
 
 // ApplyToColumns applies a function across multiple columns element-wise

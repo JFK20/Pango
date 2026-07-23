@@ -5,6 +5,7 @@ import (
 	"math"
 	"pango/Dataframe"
 	"reflect"
+	"slices"
 )
 
 type Numeric interface {
@@ -325,6 +326,38 @@ func (ns *NumericSeries[T, R]) Correlation(other *NumericSeries[T, R]) float64 {
 	}
 
 	return 0.0
+}
+
+// Quantile returns the value at the given quantile q (0-1) using linear interpolation,
+// matching numpy/pandas' default "linear" method.
+func (ns *NumericSeries[T, R]) Quantile(q float64) float64 {
+	if ns.Len() == 0 {
+		panic("cannot get quantile of empty series")
+	}
+	if q < 0 || q > 1 {
+		panic("quantile must be between 0 and 1")
+	}
+
+	values := make([]float64, ns.Len())
+	for i, v := range ns.values {
+		values[i] = float64(v)
+	}
+	slices.Sort(values)
+
+	pos := q * float64(len(values)-1)
+	lower := int(math.Floor(pos))
+	upper := int(math.Ceil(pos))
+	if lower == upper {
+		return values[lower]
+	}
+
+	frac := pos - float64(lower)
+	return values[lower]*(1-frac) + values[upper]*frac
+}
+
+// Median returns the median value (Quantile(0.5))
+func (ns *NumericSeries[T, R]) Median() float64 {
+	return ns.Quantile(0.5)
 }
 
 // NumericSeriesInterface compatibility methods

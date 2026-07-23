@@ -2,43 +2,108 @@ package dataframe
 
 import (
 	"fmt"
+	"strings"
 )
 
 // DataFrameGroupBy represents a grouped DataFrame
 type DataFrameGroupBy struct {
-	df          *DataFrame
-	groupColumn string
-	groups      map[any][]int // maps group key to row indices
-	groupKeys   []any         // maintains order of groups
+	df           *DataFrame
+	groupColumns []string
+	groups       map[string][]int // maps composite group key to row indices
+	groupOrder   []string         // maintains order of groups
+	keyValues    map[string][]any // composite key -> typed tuple, parallel to groupColumns
+}
+
+// compositeKey joins a row's grouped-column values into a single hashable map key
+func compositeKey(tuple []any) string {
+	parts := make([]string, len(tuple))
+	for i, v := range tuple {
+		parts[i] = fmt.Sprintf("%v", v)
+	}
+	return strings.Join(parts, "\x1f")
 }
 
 // GroupBy groups the DataFrame by values in the specified column
 func (df *DataFrame) GroupBy(columnName string) (*DataFrameGroupBy, error) {
-	series, err := df.GetColumn(columnName)
-	if err != nil {
-		return nil, err
+	return df.GroupByColumns(columnName)
+}
+
+// GroupByColumns groups the DataFrame by the composite values of the specified columns
+func (df *DataFrame) GroupByColumns(columnNames ...string) (*DataFrameGroupBy, error) {
+	if len(columnNames) == 0 {
+		return nil, fmt.Errorf("must specify at least one column")
 	}
 
-	// Build groups map
-	groups := make(map[any][]int)
-	var groupKeys []any
+	cols := make([]SeriesInterface, len(columnNames))
+	for i, name := range columnNames {
+		s, err := df.GetColumn(name)
+		if err != nil {
+			return nil, err
+		}
+		cols[i] = s
+	}
+
+	groups := make(map[string][]int)
+	keyValues := make(map[string][]any)
+	var groupOrder []string
 
 	for i := 0; i < df.nrows; i++ {
-		key := series.AtAny(i)
+		tuple := make([]any, len(cols))
+		for j, c := range cols {
+			tuple[j] = c.AtAny(i)
+		}
+		key := compositeKey(tuple)
 
 		if _, ok := groups[key]; !ok {
-			groupKeys = append(groupKeys, key)
+			groupOrder = append(groupOrder, key)
+			keyValues[key] = tuple
 		}
 
 		groups[key] = append(groups[key], i)
 	}
 
+	orderedColumns := make([]string, len(columnNames))
+	copy(orderedColumns, columnNames)
+
 	return &DataFrameGroupBy{
-		df:          df,
-		groupColumn: columnName,
-		groups:      groups,
-		groupKeys:   groupKeys,
+		df:           df,
+		groupColumns: orderedColumns,
+		groups:       groups,
+		groupOrder:   groupOrder,
+		keyValues:    keyValues,
 	}, nil
+}
+
+// Groups returns a map from each group's key to the DataFrame containing that group's rows.
+// For a single-column groupby the key is the grouped column's raw value. For a
+// GroupByColumns groupby the key is an internal composite identifier - recover the
+// individual grouped values from the corresponding columns in the returned DataFrame.
+func (gb *DataFrameGroupBy) Groups() map[any]*DataFrame {
+	result := make(map[any]*DataFrame, len(gb.groupOrder))
+	for _, key := range gb.groupOrder {
+		result[gb.publicKey(key)] = gb.df.selectRows(gb.groups[key])
+	}
+	return result
+}
+
+// Range provides an iterator over each group's key and DataFrame, in the order groups
+// were first encountered.
+func (gb *DataFrameGroupBy) Range() func(yield func(key any, group *DataFrame) bool) {
+	return func(yield func(key any, group *DataFrame) bool) {
+		for _, key := range gb.groupOrder {
+			if !yield(gb.publicKey(key), gb.df.selectRows(gb.groups[key])) {
+				return
+			}
+		}
+	}
+}
+
+// publicKey returns the key exposed to callers of Groups/Range for a composite key
+func (gb *DataFrameGroupBy) publicKey(key string) any {
+	if len(gb.groupColumns) == 1 {
+		return gb.keyValues[key][0]
+	}
+	return key
 }
 
 // AggFunc is a function that aggregates a SeriesInterface into a single value
@@ -107,6 +172,26 @@ func AggStdDev(s SeriesInterface) any {
 	return nil
 }
 
+// AggQuantile returns an AggFunc computing the given quantile (0-1) of a numeric series
+func AggQuantile(q float64) AggFunc {
+	return func(s SeriesInterface) any {
+		if ns, ok := s.(NumericSeriesInterface); ok {
+			return ns.Quantile(q)
+		}
+		return nil
+	}
+}
+
+// AggMedian returns an AggFunc computing the median of a numeric series
+func AggMedian() AggFunc {
+	return func(s SeriesInterface) any {
+		if ns, ok := s.(NumericSeriesInterface); ok {
+			return ns.Median()
+		}
+		return nil
+	}
+}
+
 // AggregateColumns applies specific aggregations to specific columns
 // aggregations is a map from column name to map of result suffix to AggFunc
 // Example: {"price": {"mean": AggMean, "sum": AggSum}} creates "price_mean" and "price_sum"
@@ -116,7 +201,7 @@ func (gb *DataFrameGroupBy) AggregateColumns(aggregations map[string]map[string]
 	}
 
 	// Build result DataFrame
-	nGroups := len(gb.groupKeys)
+	nGroups := len(gb.groupOrder)
 
 	// Create index from group keys
 	groupColIndex := make([]any, nGroups)
@@ -126,26 +211,29 @@ func (gb *DataFrameGroupBy) AggregateColumns(aggregations map[string]map[string]
 
 	// Build result columns
 	resultColumns := make(map[string]SeriesInterface)
-	columnOrder := []string{gb.groupColumn}
+	columnOrder := make([]string, len(gb.groupColumns))
+	copy(columnOrder, gb.groupColumns)
 
-	// Add group column
-	groupColValues := make([]any, nGroups)
-	for i, key := range gb.groupKeys {
-		groupColValues[i] = key
+	// Add one result column per grouped column
+	for gi, groupColName := range gb.groupColumns {
+		groupSeries, err := gb.df.GetColumn(groupColName)
+		if err != nil {
+			return nil, err
+		}
+
+		groupColValues := make([]any, nGroups)
+		for i, key := range gb.groupOrder {
+			groupColValues[i] = gb.keyValues[key][gi]
+		}
+
+		resultColumns[groupColName] = createSeriesFromAny(
+			groupColName,
+			groupColValues,
+			groupColIndex,
+			groupSeries.GetValueType(),
+			"int",
+		)
 	}
-
-	groupSeries, err := gb.df.GetColumn(gb.groupColumn)
-	if err != nil {
-		return nil, err
-	}
-
-	resultColumns[gb.groupColumn] = createSeriesFromAny(
-		gb.groupColumn,
-		groupColValues,
-		groupColIndex,
-		groupSeries.GetValueType(),
-		"int",
-	)
 
 	// Process each column and its aggregations
 	for colName, aggMap := range aggregations {
@@ -158,7 +246,7 @@ func (gb *DataFrameGroupBy) AggregateColumns(aggregations map[string]map[string]
 		// aggregation requested for this column (previously rebuilt once
 		// per aggregation, i.e. once per group per agg function).
 		subSeriesByGroup := make([]SeriesInterface, nGroups)
-		for i, key := range gb.groupKeys {
+		for i, key := range gb.groupOrder {
 			subSeriesByGroup[i] = gb.extractSubSeries(colName, gb.groups[key])
 		}
 
@@ -217,38 +305,43 @@ func (gb *DataFrameGroupBy) extractSubSeries(columnName string, rowIndices []int
 
 // Count returns the size of each group
 func (gb *DataFrameGroupBy) Count() (*DataFrame, error) {
-	nGroups := len(gb.groupKeys)
+	nGroups := len(gb.groupOrder)
 
 	groupColIndex := make([]any, nGroups)
 	for i := range nGroups {
 		groupColIndex[i] = i
 	}
 
-	// Group column values
-	groupColValues := make([]any, nGroups)
-	for i, key := range gb.groupKeys {
-		groupColValues[i] = key
-	}
+	resultColumns := make(map[string]SeriesInterface)
+	columnOrder := make([]string, len(gb.groupColumns))
+	copy(columnOrder, gb.groupColumns)
 
-	groupSeries, err := gb.df.GetColumn(gb.groupColumn)
-	if err != nil {
-		return nil, err
+	for gi, groupColName := range gb.groupColumns {
+		groupSeries, err := gb.df.GetColumn(groupColName)
+		if err != nil {
+			return nil, err
+		}
+
+		groupColValues := make([]any, nGroups)
+		for i, key := range gb.groupOrder {
+			groupColValues[i] = gb.keyValues[key][gi]
+		}
+
+		resultColumns[groupColName] = createSeriesFromAny(
+			groupColName,
+			groupColValues,
+			groupColIndex,
+			groupSeries.GetValueType(),
+			"int",
+		)
 	}
 
 	// Count values
 	countValues := make([]any, nGroups)
-	for i, key := range gb.groupKeys {
+	for i, key := range gb.groupOrder {
 		countValues[i] = len(gb.groups[key])
 	}
 
-	resultColumns := make(map[string]SeriesInterface)
-	resultColumns[gb.groupColumn] = createSeriesFromAny(
-		gb.groupColumn,
-		groupColValues,
-		groupColIndex,
-		groupSeries.GetValueType(),
-		"int",
-	)
 	resultColumns["count"] = createSeriesFromAny(
 		"count",
 		countValues,
@@ -257,9 +350,11 @@ func (gb *DataFrameGroupBy) Count() (*DataFrame, error) {
 		"int",
 	)
 
+	columnOrder = append(columnOrder, "count")
+
 	return &DataFrame{
 		columns:     resultColumns,
-		columnOrder: []string{gb.groupColumn, "count"},
+		columnOrder: columnOrder,
 		index:       groupColIndex,
 		indexType:   "int",
 		nrows:       nGroups,

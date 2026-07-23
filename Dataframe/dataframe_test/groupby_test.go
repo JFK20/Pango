@@ -22,6 +22,22 @@ func newGroupedDataFrame(t *testing.T) *dataframe.DataFrame {
 	return df
 }
 
+// newMultiGroupedDataFrame adds a region column so category+region form a composite key:
+// (A, East) x2, (A, West) x1, (B, East) x1, (B, West) x1.
+func newMultiGroupedDataFrame(t *testing.T) *dataframe.DataFrame {
+	t.Helper()
+
+	category := series.NewIndexSeries("category", []string{"A", "A", "A", "B", "B"})
+	region := series.NewIndexSeries("region", []string{"East", "East", "West", "East", "West"})
+	price := series.NewIndexNumericSeries("price", []float64{10, 20, 30, 40, 50})
+
+	df, err := dataframe.NewDataFrame(category, region, price)
+	if err != nil {
+		t.Fatalf("unexpected error building multi-grouped DataFrame: %v", err)
+	}
+	return df
+}
+
 func TestGroupBy(t *testing.T) {
 	df := newGroupedDataFrame(t)
 
@@ -242,4 +258,221 @@ func TestGroupByCount(t *testing.T) {
 			t.Errorf("category %s: expected count %d, got %v", cat, want[cat], countCol.AtAny(i))
 		}
 	}
+}
+
+func TestGroupByColumns(t *testing.T) {
+	df := newMultiGroupedDataFrame(t)
+
+	gb, err := df.GroupByColumns("category", "region")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	result, err := gb.AggregateColumns(map[string]map[string]dataframe.AggFunc{
+		"price": {"sum": dataframe.AggSum},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rows, cols := result.Shape(); rows != 4 || cols != 3 {
+		t.Fatalf("expected shape (4, 3), got (%d, %d)", rows, cols)
+	}
+
+	catCol, err := result.GetColumn("category")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	regionCol, err := result.GetColumn("region")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	sumCol, err := result.GetNumericColumn("price_sum")
+	if err != nil {
+		t.Fatalf("expected price_sum to be numeric: %v", err)
+	}
+
+	wantSum := map[string]float64{"A|East": 30, "A|West": 30, "B|East": 40, "B|West": 50}
+	for i := 0; i < result.Len(); i++ {
+		key := catCol.AtAny(i).(string) + "|" + regionCol.AtAny(i).(string)
+		if got := sumCol.AtAny(i).(float64); got != wantSum[key] {
+			t.Errorf("%s: expected sum %v, got %v", key, wantSum[key], got)
+		}
+	}
+
+	t.Run("errors with no columns specified", func(t *testing.T) {
+		if _, err := df.GroupByColumns(); err == nil {
+			t.Fatal("expected error grouping by zero columns")
+		}
+	})
+
+	t.Run("errors for a missing column", func(t *testing.T) {
+		if _, err := df.GroupByColumns("category", "missing"); err == nil {
+			t.Fatal("expected error grouping by a missing column")
+		}
+	})
+}
+
+func TestDataFrameGroupBy_Groups(t *testing.T) {
+	t.Run("single-column groupby keys are the raw column value", func(t *testing.T) {
+		df := newGroupedDataFrame(t)
+		gb, err := df.GroupBy("category")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		groups := gb.Groups()
+		if len(groups) != 2 {
+			t.Fatalf("expected 2 groups, got %d", len(groups))
+		}
+
+		groupA, ok := groups["A"]
+		if !ok {
+			t.Fatal("expected a group keyed by \"A\"")
+		}
+		if groupA.Len() != 2 {
+			t.Errorf("expected group A to have 2 rows, got %d", groupA.Len())
+		}
+
+		groupB, ok := groups["B"]
+		if !ok {
+			t.Fatal("expected a group keyed by \"B\"")
+		}
+		if groupB.Len() != 3 {
+			t.Errorf("expected group B to have 3 rows, got %d", groupB.Len())
+		}
+
+		// The per-group DataFrame still carries the grouped column and every other column.
+		priceCol, err := groupB.GetNumericColumn("price")
+		if err != nil {
+			t.Fatalf("expected price to be numeric: %v", err)
+		}
+		if got := priceCol.SumFloat(); got != 120 {
+			t.Errorf("expected group B price sum 120, got %v", got)
+		}
+	})
+
+	t.Run("multi-column groupby produces one group per composite key, row counts intact", func(t *testing.T) {
+		df := newMultiGroupedDataFrame(t)
+		gb, err := df.GroupByColumns("category", "region")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		groups := gb.Groups()
+		if len(groups) != 4 {
+			t.Fatalf("expected 4 groups, got %d", len(groups))
+		}
+
+		totalRows := 0
+		for _, group := range groups {
+			totalRows += group.Len()
+		}
+		if totalRows != df.Len() {
+			t.Errorf("expected group row counts to sum to %d, got %d", df.Len(), totalRows)
+		}
+	})
+}
+
+func TestDataFrameGroupBy_Range(t *testing.T) {
+	df := newGroupedDataFrame(t)
+	gb, err := df.GroupBy("category")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	seen := make(map[any]int)
+	for key, group := range gb.Range() {
+		seen[key] = group.Len()
+	}
+
+	if seen["A"] != 2 || seen["B"] != 3 {
+		t.Errorf("expected A:2 B:3, got %v", seen)
+	}
+
+	t.Run("stops early when the yield function returns false", func(t *testing.T) {
+		count := 0
+		for range gb.Range() {
+			count++
+			break
+		}
+		if count != 1 {
+			t.Errorf("expected iteration to stop after 1 group, got %d", count)
+		}
+	})
+}
+
+func TestAggQuantileAndAggMedian(t *testing.T) {
+	df := newGroupedDataFrame(t)
+	gb, err := df.GroupBy("category")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	result, err := gb.AggregateColumns(map[string]map[string]dataframe.AggFunc{
+		"price": {
+			"median": dataframe.AggMedian(),
+			"p90":    dataframe.AggQuantile(0.9),
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	catCol, err := result.GetColumn("category")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	medianCol, err := result.GetNumericColumn("price_median")
+	if err != nil {
+		t.Fatalf("expected price_median to be numeric: %v", err)
+	}
+	p90Col, err := result.GetNumericColumn("price_p90")
+	if err != nil {
+		t.Fatalf("expected price_p90 to be numeric: %v", err)
+	}
+
+	// group A = [10, 20]: median 15, p90 = 10 + 0.9*(20-10) = 19
+	// group B = [30, 40, 50]: median 40, p90 = 30 + 0.9*(50-30) = 48
+	wantMedian := map[string]float64{"A": 15, "B": 40}
+	wantP90 := map[string]float64{"A": 19, "B": 48}
+
+	for i := 0; i < result.Len(); i++ {
+		cat := catCol.AtAny(i).(string)
+		if got := medianCol.AtAny(i).(float64); got != wantMedian[cat] {
+			t.Errorf("category %s: expected median %v, got %v", cat, wantMedian[cat], got)
+		}
+		if got := p90Col.AtAny(i).(float64); math.Abs(got-wantP90[cat]) > 1e-9 {
+			t.Errorf("category %s: expected p90 %v, got %v", cat, wantP90[cat], got)
+		}
+	}
+
+	t.Run("returns nil for a non-numeric column", func(t *testing.T) {
+		result, err := gb.AggregateColumns(map[string]map[string]dataframe.AggFunc{
+			"product": {
+				"median": dataframe.AggMedian(),
+				"p90":    dataframe.AggQuantile(0.9),
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		medianCol, err := result.GetColumn("product_median")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		p90Col, err := result.GetColumn("product_p90")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for i := 0; i < result.Len(); i++ {
+			if medianCol.AtAny(i) != nil {
+				t.Errorf("expected nil median for non-numeric column, got %v", medianCol.AtAny(i))
+			}
+			if p90Col.AtAny(i) != nil {
+				t.Errorf("expected nil p90 for non-numeric column, got %v", p90Col.AtAny(i))
+			}
+		}
+	})
 }

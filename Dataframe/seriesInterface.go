@@ -56,4 +56,10 @@ type NumericSeriesInterface interface {
 
 	// StdDev returns the standard deviation with given degrees of freedom
 	StdDev(dof int) float64
+
+	// Quantile returns the value at the given quantile (0-1) using linear interpolation
+	Quantile(q float64) float64
+
+	// Median returns the median value (Quantile(0.5))
+	Median() float64
 }

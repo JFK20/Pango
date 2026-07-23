@@ -335,6 +335,45 @@ func TestFilterColumn(t *testing.T) {
 	})
 }
 
+func TestFilterIn(t *testing.T) {
+	df := newSampleDataFrame(t)
+
+	filtered, err := df.FilterIn("name", []any{"Bob", "David"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if filtered.Len() != 2 {
+		t.Errorf("expected 2 matching rows, got %d", filtered.Len())
+	}
+
+	nameCol, err := filtered.GetColumn("name")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for i := 0; i < filtered.Len(); i++ {
+		name := nameCol.AtAny(i)
+		if name != "Bob" && name != "David" {
+			t.Errorf("unexpected name %v in filtered result", name)
+		}
+	}
+
+	t.Run("returns an empty DataFrame when nothing matches", func(t *testing.T) {
+		empty, err := df.FilterIn("name", []any{"Nobody"})
+		if err != nil {
+			t.Fatalf("expected no error for zero matches, got: %v", err)
+		}
+		if empty.Len() != 0 {
+			t.Errorf("expected 0 rows, got %d", empty.Len())
+		}
+	})
+
+	t.Run("errors for a missing column", func(t *testing.T) {
+		if _, err := df.FilterIn("missing", []any{"Bob"}); err == nil {
+			t.Fatal("expected error for missing column")
+		}
+	})
+}
+
 func TestResetIndex(t *testing.T) {
 	filtered, err := newSampleDataFrame(t).FilterColumn("sales", func(v any) bool { return v.(int) > 150 })
 	if err != nil {
@@ -495,4 +534,185 @@ func TestColumnTypesAndStringers(t *testing.T) {
 	if s := df.Info(); s == "" {
 		t.Error("expected non-empty Info() output")
 	}
+}
+
+func TestAstypeColumn(t *testing.T) {
+	df := newSampleDataFrame(t)
+
+	t.Run("casts a numeric column to string", func(t *testing.T) {
+		result, err := df.AstypeColumn("sales", "string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetColumn("sales")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if col.AtAny(0) != "100" {
+			t.Errorf("expected \"100\", got %v", col.AtAny(0))
+		}
+	})
+
+	t.Run("casts a string column to float64", func(t *testing.T) {
+		asStr, err := df.AstypeColumn("sales", "string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		asFloat, err := asStr.AstypeColumn("sales", "float64")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := asFloat.GetNumericColumn("sales")
+		if err != nil {
+			t.Fatalf("expected sales to be numeric: %v", err)
+		}
+		if col.AtAny(0) != 100.0 {
+			t.Errorf("expected 100.0, got %v", col.AtAny(0))
+		}
+	})
+
+	t.Run("casts a numeric column directly to float64", func(t *testing.T) {
+		result, err := df.AstypeColumn("sales", "float64")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetNumericColumn("sales")
+		if err != nil {
+			t.Fatalf("expected sales to be numeric: %v", err)
+		}
+		if col.AtAny(0) != 100.0 {
+			t.Errorf("expected 100.0, got %v", col.AtAny(0))
+		}
+	})
+
+	t.Run("casts a numeric column to int64", func(t *testing.T) {
+		result, err := df.AstypeColumn("revenue", "int64")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetColumn("revenue")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if col.AtAny(0) != int64(1500) {
+			t.Errorf("expected 1500, got %v", col.AtAny(0))
+		}
+	})
+
+	t.Run("casts a string column to int", func(t *testing.T) {
+		asStr, err := df.AstypeColumn("sales", "string")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		asInt, err := asStr.AstypeColumn("sales", "int")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := asInt.GetColumn("sales")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if col.AtAny(0) != 100 {
+			t.Errorf("expected 100, got %v", col.AtAny(0))
+		}
+	})
+
+	t.Run("casts a string column to bool", func(t *testing.T) {
+		flags := series.NewIndexSeries("active", []string{"true", "false", "1", "0"})
+		flagDf, err := dataframe.NewDataFrame(flags)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		result, err := flagDf.AstypeColumn("active", "bool")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetColumn("active")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []bool{true, false, true, false}
+		for i, w := range want {
+			if col.AtAny(i) != w {
+				t.Errorf("row %d: expected %v, got %v", i, w, col.AtAny(i))
+			}
+		}
+	})
+
+	t.Run("casts a bool column to bool (identity)", func(t *testing.T) {
+		flags := series.NewIndexSeries("active", []bool{true, false, true})
+		flagDf, err := dataframe.NewDataFrame(flags)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		result, err := flagDf.AstypeColumn("active", "bool")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetColumn("active")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []bool{true, false, true}
+		for i, w := range want {
+			if col.AtAny(i) != w {
+				t.Errorf("row %d: expected %v, got %v", i, w, col.AtAny(i))
+			}
+		}
+	})
+
+	t.Run("casts a numeric column to bool", func(t *testing.T) {
+		counts := series.NewIndexNumericSeries("flag", []int{0, 1, 2, 0})
+		countDf, err := dataframe.NewDataFrame(counts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		result, err := countDf.AstypeColumn("flag", "bool")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		col, err := result.GetColumn("flag")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []bool{false, true, true, false}
+		for i, w := range want {
+			if col.AtAny(i) != w {
+				t.Errorf("row %d: expected %v, got %v", i, w, col.AtAny(i))
+			}
+		}
+	})
+
+	t.Run("errors for an unsupported target type", func(t *testing.T) {
+		if _, err := df.AstypeColumn("sales", "complex128"); err == nil {
+			t.Fatal("expected error for unsupported target type")
+		}
+	})
+
+	t.Run("errors for a missing column", func(t *testing.T) {
+		if _, err := df.AstypeColumn("missing", "string"); err == nil {
+			t.Fatal("expected error for missing column")
+		}
+	})
+
+	t.Run("panics when a value cannot be converted to a number", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for unconvertible value")
+			}
+		}()
+		_, _ = df.AstypeColumn("name", "float64")
+	})
+
+	t.Run("panics when a value cannot be converted to bool", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for unconvertible value")
+			}
+		}()
+		_, _ = df.AstypeColumn("name", "bool")
+	})
 }

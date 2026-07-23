@@ -1153,3 +1153,127 @@ func TestCount(t *testing.T) {
 		}
 	})
 }
+
+func TestQuantile(t *testing.T) {
+	t.Run("calculates known quantiles on an int series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4, 5}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		cases := map[float64]float64{
+			0.25: 2.0,
+			0.5:  3.0,
+			0.75: 4.0,
+		}
+		for q, expected := range cases {
+			result := ns.Quantile(q)
+			if math.Abs(result-expected) > 0.0001 {
+				t.Errorf("Quantile(%f): expected %f, got %f", q, expected, result)
+			}
+		}
+	})
+
+	t.Run("calculates known quantiles on a float series", func(t *testing.T) {
+		values := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		result := ns.Quantile(0.5)
+		expected := 3.0
+		if math.Abs(result-expected) > 0.0001 {
+			t.Errorf("expected %f, got %f", expected, result)
+		}
+	})
+
+	t.Run("q=0 matches Min", func(t *testing.T) {
+		values := []int{5, 3, 9, 1, 7}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		result := ns.Quantile(0)
+		expected := float64(ns.Min())
+		if math.Abs(result-expected) > 0.0001 {
+			t.Errorf("expected %f, got %f", expected, result)
+		}
+	})
+
+	t.Run("q=1 matches Max", func(t *testing.T) {
+		values := []int{5, 3, 9, 1, 7}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		result := ns.Quantile(1)
+		expected := float64(ns.Max())
+		if math.Abs(result-expected) > 0.0001 {
+			t.Errorf("expected %f, got %f", expected, result)
+		}
+	})
+
+	t.Run("returns the single value for a one-element series", func(t *testing.T) {
+		values := []int{42}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		for _, q := range []float64{0, 0.25, 0.5, 0.75, 1} {
+			result := ns.Quantile(q)
+			if result != 42.0 {
+				t.Errorf("Quantile(%f): expected 42, got %f", q, result)
+			}
+		}
+	})
+
+	t.Run("panics on empty series", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for empty series")
+			}
+		}()
+
+		values := []int{}
+		ns := series.NewIndexNumericSeries("test", values)
+		ns.Quantile(0.5)
+	})
+
+	t.Run("panics on q below 0", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for q < 0")
+			}
+		}()
+
+		values := []int{1, 2, 3}
+		ns := series.NewIndexNumericSeries("test", values)
+		ns.Quantile(-0.1)
+	})
+
+	t.Run("panics on q above 1", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for q > 1")
+			}
+		}()
+
+		values := []int{1, 2, 3}
+		ns := series.NewIndexNumericSeries("test", values)
+		ns.Quantile(1.1)
+	})
+}
+
+func TestMedian(t *testing.T) {
+	t.Run("matches Quantile(0.5)", func(t *testing.T) {
+		values := []int{7, 2, 9, 4, 1}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		median := ns.Median()
+		expected := ns.Quantile(0.5)
+		if median != expected {
+			t.Errorf("expected Median to equal Quantile(0.5) (%f), got %f", expected, median)
+		}
+	})
+
+	t.Run("calculates median of an even-length series", func(t *testing.T) {
+		values := []int{1, 2, 3, 4}
+		ns := series.NewIndexNumericSeries("test", values)
+
+		median := ns.Median()
+		expected := 2.5
+		if math.Abs(median-expected) > 0.0001 {
+			t.Errorf("expected %f, got %f", expected, median)
+		}
+	})
+}
